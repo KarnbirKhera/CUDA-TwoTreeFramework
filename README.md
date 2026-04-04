@@ -283,9 +283,9 @@ This version of the framework assumes:
 
 ## Scope and Intent
 
-This framework targets GPU features up to sm_70 (Volta) and focuses exclusively on **correctness** – deriving the right index expressions and memory staging for tiled kernels. It does not address performance tuning (occupancy, bank conflicts, instruction throughput), which requires profiling.
+This framework targets GPU features up to sm_70 (Volta) and focuses exclusively on **correctness**: deriving the right index expressions and memory staging for tiled kernels. It does not address performance tuning (occupancy, bank conflicts, instruction throughput), which requires profiling.
 
-Each version undergoes careful pedagogical refinement to ensure it genuinely lowers the barrier to entry for CUDA – not just presenting the correct answer, but making the path to it feel learnable.
+Every version of this framework, current and future, is refined with a single pedagogical goal: to lower the barrier to entry for CUDA, not by merely presenting the correct answer, but by making the path to that answer feel learnable.
 
 It is worth being explicit about what this framework is **not**:
 - It is **not** a replacement for production frameworks like CUTLASS, cuTe, or Triton.
