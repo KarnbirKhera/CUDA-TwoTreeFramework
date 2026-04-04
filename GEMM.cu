@@ -345,15 +345,92 @@ __global__ void gemm_register_2d(float* A, float* B, float* C, int M, int N, int
     
 /**************************** Intialize pointers & sum ***************************************************** */
 
+      /*
+    <<
+        We access our A_shared in the compute phase in the following way:
+            a[regRow] = A_shared[threadIdx.y * WORK_PER_THREAD + regRow][k];
+        In our access pattern we have A_shared[iterator][fixed] where k remains still while our regRow iterator iterates DOWN our shared memory tile.
+        Since we are iterating column wise, rather than row wise (how shared memory is physically stored), we must pad our 2nd dimension by + 1.
+
+        This may seem confusing as to why this prevents bank conflicts, but lets analyze the formula shared memory uses to find which bank an access lands into:
+            bank = (row * TILE_SIZE + col) % 32
+        Where our TILE_SIZE is our size when we initialize our A_shared[32][33]. Note, the % 32 does not change, and is derived from the hardware itself.
+
+        Now lets trace our access assuming we did NOT pad our A_shared resulting in A_shared[32][32], and we are accessing it column wise
+        (we iterate down a column, while the row stays fixed)
+
+         (row * TILE_SIZE + col) % 32
+        bank = (0 * 32 + 0) = 0  % 32 = 0        (BANK 0 IS ACCESSED)
+        bank = (1 * 32 + 0) = 0  % 32 = 0        (BANK 0 IS ACCESSED)
+        bank = (2 * 32 + 0) = 0  % 32 = 0        (BANK 0 IS ACCESSED)
+
+        All of our 32 threads hitting in the same bank resulting in serialization where a thread must wait on the thread before it to access the shared memory.
+        Now to fix this column wise access of shared memory, we add +1 to the column size resulting in A_shared[32][33]. Lets try the same example with this 
+        new specification.
+
+         (row * TILE_SIZE + col) % 32
+        bank = (0 * 33 + 0) = 0  % 32 = 0        (BANK 0 IS ACCESSED)
+        bank = (1 * 33 + 0) = 1  % 32 = 1        (BANK 1 IS ACCESSED)
+        bank = (2 * 33 + 0) = 2  % 32 = 2        (BANK 2 IS ACCESSED)
+
+        From this simple trade off of having dummy values in our shared memory, we avoid a 32 way shared memory serialization! 
+        Note, we trade an increased shared memory use to avoid this 32 way serialization. While this extra use may seem trivial, it should be taken into account
+        that it contributes to the maximum number of bytes shared memory can hold. If the number of data stored in shared memory exceeds what it can hold, the excess memory
+        is spilled into the slower L1 cache.
+
+
+        This also naturally brings up the question, well why can't we pad our row rather than our column resuling in A_shared[33][32]?
+        This question reveals a much deeper insight into what our (row * TILE_SIZE + col) % 32 formula means.
+
+        Lets first seperate our formula into two parts. The first is the (row * TILE_SIZE + col) and the second is the % 32. 
+
+
+        Our first formula represents the following:
+                                                       (row * TILE_SIZE + col)
+                    translates to:
+                                    (Which Row Am I  *  How Big Is The Row  +  Which Column Am I Within The Row)
+        
+        The first part of this formula is essentially tell us which row are we in, and what is our column offset within the row.
+
+
+        Now lets analyze the second part of our formula:
+                                                        % 32
+                                        translates to:
+                                                Given our row and column offset (first part), how does it map to our 32 hardware banks
+
+        These two parts together essentially means that no matter our row and column offset, we will always have a mapping to our 32 hardware banks.
+
+
+        Now lets go to our original question of why A_shared[33][32] doesn't help in this case and what it means. If we were to add a row to our shared memory tile,
+        our formula itself does not change.
+
+                        Our (Which Row Am I  *  How Big Is The Row  +  Which Column Am I Within The Row)
+
+        simply extends how many rows. This means no matter how many rows we have, we are fundamentally still constrained by how big each row is (our second parameter). To
+        confirm this, lets apply the same pattern we before but rather than assuming our usual 0-31 (32) Which Row Am I Values, lets input 0-32 (33)
+
+         (row * TILE_SIZE + col) % 32
+        bank = (0 * 32 + 0) = 0  % 32 = 0        (BANK 0 IS ACCESSED)
+        ...
+        bank = (31 * 32 + 0) = 0  % 32 = 0        (BANK 0 IS ACCESSED)
+        bank = (32 * 32 + 0) = 0  % 32 = 0        (BANK 0 IS ACCESSED)        
+                    
+        So at a fundamental level, our formula relies on our constant TILE_SIZE to stagger our bank access to avoid serialization
+
+
+
+    >>
+    */
     __shared__ float A_shared[32][33]; // [ELEMENT]
     __shared__ float B_shared[32][32]; // [ELEMENT]
 
     //Accumlate 4x4 in registers, avoid Shared Memory
     float accumulate[WORK_PER_THREAD][WORK_PER_THREAD] = {{0.0f}}; // [ELEMENT]
 
-    //Thread mapping
-    //TODO: Redo the dimensional analysis on these parts
+    // col = (block index in X) * (columns per block) + (thread index in X) * (columns per thread) = Our current element (X) mapped by our thread (X) in our block (X)
     int col = blockIdx.x * TILE_SIZE + threadIdx.x * WORK_PER_THREAD; // [ELEMENT]
+
+    // row = (block index in Y) * (columns per block) + (thread index in Y) * (columns per thread) = Our current element (Y) mapped by our thread (Y) in our block (Y)
     int row = blockIdx.y * TILE_SIZE + threadIdx.y * WORK_PER_THREAD; // [ELEMENT]
     
     int numOfTiles = (K + TILE_SIZE - 1) / TILE_SIZE; // 32 
