@@ -294,7 +294,7 @@ These assumptions are progressively relaxed in later versions of the framework, 
 
 ## Scope and Intent
 
-The framework currently targets features up to sm_70 (Volta) and is still under active development. Each version requires careful pedagogical refinement to ensure it genuinely lowers the barrier to entry for pure CUDA work, not just presenting the correct answer, but making the path to it feel learnable.
+The current iteration of framework (not shown here) currently targets features up to sm_70 (Volta) and is still under active development. Each version requires careful pedagogical refinement to ensure it genuinely lowers the barrier to entry for pure CUDA work, not just presenting the correct answer, but making the path to it feel learnable.
 
 It is worth being explicit about what this framework is **not**:
 - It is absolutely not a replacement for production frameworks like CUTLASS, cuTe, or Triton
