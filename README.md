@@ -278,32 +278,22 @@ This version of the framework assumes:
 - Tensors are stored and accessed using simple row-major arithmetic: `Index x Stride + Offset`
 - The execution model is Grid / Block / Thread, as warp-level operations such as tensor cores introduce additional iterator types that require extending the framework beyond this model
 
-These assumptions are progressively relaxed in later versions of the framework, developed alongside the kernels covered in my [`MLSys2026-9Week-LearningPlan`](link) repo:
-
-| Kernel | Notes |
-|---|---|
-| Shared Reduced Sum | |
-| Transpose | |
-| GEMM | Covered in this version |
-| Dense Attention | |
-| Paged KV MLA Attention | |
-| TopK Indexer | |
-| Sparse Attention | |
-
-The current iteration of the framework (not shown here) extracts the patterns displayed in these kernels to ensure that the framework expresses kernels beyond just these specific implementations.
 
 ---
 
 ## Scope and Intent
 
-The current iteration of framework (not shown here) currently targets features up to sm_70 (Volta) and is still under active development. Each version requires careful pedagogical refinement to ensure it genuinely lowers the barrier to entry for pure CUDA work, not just presenting the correct answer, but making the path to it feel learnable.
+This framework targets GPU features up to sm_70 (Volta) and focuses exclusively on **correctness** – deriving the right index expressions and memory staging for tiled kernels. It does not address performance tuning (occupancy, bank conflicts, instruction throughput), which requires profiling.
+
+Each version undergoes careful pedagogical refinement to ensure it genuinely lowers the barrier to entry for CUDA – not just presenting the correct answer, but making the path to it feel learnable.
 
 It is worth being explicit about what this framework is **not**:
-- It is absolutely not a replacement for production frameworks like CUTLASS, cuTe, or Triton
-- It is absolutely not a substitute for profiling, which allows us to understand how and why our kernel performs on specific hardware
+- It is **not** a replacement for production frameworks like CUTLASS, cuTe, or Triton.
+- It is **not** a substitute for profiling, which tells you how and why your kernel performs on specific hardware.
 
-What it is meant to be is a **teaching tool**. Understanding *why* a kernel is correct and understanding *how* it performs on specific hardware are two separate problems, and this framework addresses the former. Given a tensor layout and a set of operations, it provides a systematic way to derive kernel structure from first principles. It works in both directions:
-- **Top-down**: From geometry and problem structure to kernel code
-- **Bottom-up**: From existing kernel code back to the geometry, so beginners can understand why the structure is the way it is
+What it **is** meant to be is a **teaching tool**. Understanding *why* a kernel is correct and understanding *how* it performs are two separate problems; this framework addresses the former. Given a tensor layout and a set of operations, it provides a systematic way to derive kernel structure from first principles. It works in both directions:
+
+- **Top-down**: From geometry and problem structure to kernel code.
+- **Bottom-up**: From existing kernel code back to the geometry, so beginners can understand why the structure is the way it is.
 
 The goal is not to abstract away CUDA, but to make its underlying logic visible and learnable.
