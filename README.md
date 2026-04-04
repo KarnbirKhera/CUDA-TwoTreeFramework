@@ -290,6 +290,8 @@ These assumptions are progressively relaxed in later versions of the framework, 
 | TopK Indexer | |
 | Sparse Attention | |
 
+The current iteration of the framework (not shown here) extracts the patterns displayed in these kernels to ensure that the framework expresses kernels beyond just these specific implementations.
+
 ---
 
 ## Scope and Intent
