@@ -1,6 +1,7 @@
 
 #include <iostream>
 
+// ANY COMMENT WITH THE FOLLOWING PREFIX AND SUFFIX <> WAS ADDED AFTER THE KERNEL FOR THIS SPECIFIC REPO FOR ANY CUDA LEARNERS TO UNDERSTAND THE 2D REGISTER ALLOCATED GEMM CODE STRUCTURE.
 
 /**                  -------- PRELUDE --------
  * I'll admit, it took a bit of visualization to understand how 
