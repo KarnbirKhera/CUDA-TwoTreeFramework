@@ -1,6 +1,6 @@
 # Two Tree Framework — CUDA
 
-A systematic and pedagogical approach to deriving the correct index structure of a CUDA kernel before writing a single line of code.
+A systematic and pedagogical approach to deriving the correct index structure of 2D Register Allocated GEMM before writing a single line of code.
 
 ---
 
