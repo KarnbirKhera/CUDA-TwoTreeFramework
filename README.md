@@ -1,4 +1,4 @@
-# Two Tree Framework (V1) CUDA
+# Two Tree Framework (V1) - CUDA
 
 A systematic and pedagogical approach to deriving the correct index structure of 2D Register Allocated GEMM before writing a single line of code.
 
