@@ -1,0 +1,2689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Current Mental Model of GPU Hierarchy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #f5f0e8;
+    --bg2:      #ede8df;
+    --bg3:      #e4ddd3;
+    --text:     #1c1917;
+    --muted:    #78716c;
+    --border:   #cec8bd;
+    --border2:  #bfb8ac;
+
+    --c-1a:     #92400e;
+    --c-1a-bg:  #fef3c7;
+    --c-1a-bd:  #fcd34d;
+
+    --c-ac:     #4c1d95;
+    --c-ac-bg:  #ede9fe;
+    --c-ac-bd:  #c4b5fd;
+
+    --c-1b:     #7c2d12;
+    --c-1b-bg:  #fff7ed;
+    --c-1b-bd:  #fdba74;
+
+    --c-2:      #14532d;
+    --c-2-bg:   #f0fdf4;
+    --c-2-bd:   #86efac;
+
+    --c-3:      #1e3a8a;
+    --c-3-bg:   #eff6ff;
+    --c-3-bd:   #93c5fd;
+
+    --c-4:      #134e4a;
+    --c-4-bg:   #f0fdfa;
+    --c-4-bd:   #5eead4;
+
+    --c-5:      #3b0764;
+    --c-5-bg:   #faf5ff;
+    --c-5-bd:   #d8b4fe;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 16px;
+    line-height: 1.8;
+  }
+
+  /* ── Layout ── */
+  .page { max-width: 900px; margin: 0 auto; padding: 64px 16px 96px; }
+
+  /* ── Header ── */
+  .masthead { margin-bottom: 64px; padding-bottom: 40px; border-bottom: 2px solid var(--text); }
+  .masthead-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 20px;
+  }
+  .masthead h1 {
+    font-family: 'Fraunces', serif;
+    font-size: 44px;
+    font-weight: 300;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    margin-bottom: 20px;
+  }
+  .masthead h1 em { font-style: italic; font-weight: 300; }
+  .masthead-sub {
+    font-size: 16px;
+    color: var(--muted);
+    line-height: 1.7;
+    max-width: 560px;
+    font-weight: 300;
+  }
+
+  /* ── Flow bar ── */
+  .flowbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    margin: 40px 0 56px;
+    padding: 20px 24px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .flowbar-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    width: 100%;
+    margin-bottom: 4px;
+  }
+  .fb-pill {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid;
+    white-space: nowrap;
+  }
+  .fb-arr { color: var(--border2); font-size: 14px; margin: 0 2px; }
+
+  .fb-1a  { color: var(--c-1a);  border-color: var(--c-1a-bd);  background: var(--c-1a-bg); }
+  .fb-ac  { color: var(--c-ac);  border-color: var(--c-ac-bd);  background: var(--c-ac-bg); }
+  .fb-1b  { color: var(--c-1b);  border-color: var(--c-1b-bd);  background: var(--c-1b-bg); }
+  .fb-2   { color: var(--c-2);   border-color: var(--c-2-bd);   background: var(--c-2-bg);  }
+  .fb-3   { color: var(--c-3);   border-color: var(--c-3-bd);   background: var(--c-3-bg);  }
+  .fb-4   { color: var(--c-4);   border-color: var(--c-4-bd);   background: var(--c-4-bg);  }
+  .fb-5   { color: var(--c-5);   border-color: var(--c-5-bd);   background: var(--c-5-bg);  }
+  .fb-code { color: var(--muted); border-color: var(--border); background: var(--bg3); }
+
+  /* ── Intro section ── */
+  .intro { margin-bottom: 56px; }
+  .intro p { margin-bottom: 16px; color: var(--text); font-weight: 300; }
+
+  /* ── Section ── */
+  .section { margin-bottom: 64px; }
+
+  .section-head {
+    display: flex;
+    gap: 18px;
+    align-items: flex-start;
+    margin-bottom: 28px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 5px 10px;
+    border-radius: 5px;
+    border: 1px solid;
+    flex-shrink: 0;
+    margin-top: 4px;
+    line-height: 1.4;
+    text-align: center;
+  }
+  .b-1a { color: var(--c-1a); border-color: var(--c-1a-bd); background: var(--c-1a-bg); }
+  .b-ac { color: var(--c-ac); border-color: var(--c-ac-bd); background: var(--c-ac-bg); }
+  .b-1b { color: var(--c-1b); border-color: var(--c-1b-bd); background: var(--c-1b-bg); }
+  .b-2  { color: var(--c-2);  border-color: var(--c-2-bd);  background: var(--c-2-bg);  }
+  .b-3  { color: var(--c-3);  border-color: var(--c-3-bd);  background: var(--c-3-bg);  }
+  .b-4  { color: var(--c-4);  border-color: var(--c-4-bd);  background: var(--c-4-bg);  }
+  .b-5  { color: var(--c-5);  border-color: var(--c-5-bd);  background: var(--c-5-bg);  }
+
+  .section-head-text h2 {
+    font-family: 'Fraunces', serif;
+    font-size: 24px;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    color: var(--text);
+    margin-bottom: 4px;
+    line-height: 1.3;
+  }
+  .section-q {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    font-style: italic;
+    line-height: 1.5;
+  }
+
+  /* ── Prose ── */
+  .prose p { margin-bottom: 18px; font-weight: 300; line-height: 1.85; }
+  .prose p:last-child { margin-bottom: 0; }
+  .prose strong { font-weight: 500; color: var(--text); }
+
+  /* ── Emphasis callout ── */
+  .callout {
+    background: var(--bg2);
+    border-left: 3px solid var(--border2);
+    border-radius: 0 6px 6px 0;
+    padding: 16px 20px;
+    margin: 24px 0;
+    font-size: 15px;
+    font-weight: 300;
+    color: var(--text);
+    line-height: 1.75;
+  }
+  .callout strong { font-weight: 500; }
+
+  /* ── Coloured concept callout ── */
+  .concept {
+    border-radius: 8px;
+    border: 1px solid;
+    padding: 18px 22px;
+    margin: 24px 0;
+  }
+  .concept-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    display: block;
+  }
+  .concept p { font-size: 14.5px; font-weight: 300; line-height: 1.75; margin-bottom: 10px; }
+  .concept p:last-child { margin-bottom: 0; }
+
+  .c-area   { background: #fefce8; border-color: #fde047; }
+  .c-area   .concept-label { color: #854d0e; }
+  .c-reduce { background: #fef2f2; border-color: #fca5a5; }
+  .c-reduce .concept-label { color: #991b1b; }
+  .c-pivot  { background: var(--c-ac-bg); border-color: var(--c-ac-bd); }
+  .c-pivot  .concept-label { color: var(--c-ac); }
+  .c-rule   { background: var(--c-3-bg); border-color: var(--c-3-bd); }
+  .c-rule   .concept-label { color: var(--c-3); }
+
+  /* ── Definition grid ── */
+  .def-grid { margin: 24px 0; display: flex; flex-direction: column; gap: 12px; }
+  .def-row {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 16px;
+    align-items: start;
+    padding: 14px 16px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  .def-term {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+    padding-top: 2px;
+    line-height: 1.5;
+  }
+  .def-body { font-size: 14px; font-weight: 300; color: var(--text); line-height: 1.7; }
+
+  /* ── Hierarchy diagram ── */
+  .hierarchy {
+    margin: 24px 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .hier-row {
+    display: grid;
+    grid-template-columns: 120px 90px 1fr;
+    border-bottom: 1px solid var(--border);
+    align-items: stretch;
+  }
+  .hier-row:last-child { border-bottom: none; }
+  .hier-level {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    border-right: 1px solid var(--border);
+    background: var(--bg2);
+    color: var(--text);
+  }
+  .hier-mem {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 14px 14px;
+    display: flex;
+    align-items: center;
+    border-right: 1px solid var(--border);
+    background: var(--bg3);
+    color: var(--muted);
+  }
+  .hier-desc {
+    font-size: 13.5px;
+    font-weight: 300;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    color: var(--text);
+    line-height: 1.6;
+  }
+
+  /* ── Column questions ── */
+  .col-questions { margin: 24px 0; display: flex; flex-direction: column; gap: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .col-q-row {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    border-bottom: 1px solid var(--border);
+  }
+  .col-q-row:last-child { border-bottom: none; }
+  .col-q-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 14px 16px;
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    line-height: 1.4;
+  }
+  .col-q-body {
+    padding: 14px 18px;
+    font-size: 14px;
+    font-weight: 300;
+    color: var(--text);
+    line-height: 1.7;
+  }
+  .col-q-body em { font-style: italic; color: var(--muted); font-size: 13px; display: block; margin-top: 4px; }
+
+  /* ── Phase list ── */
+  .phase-list { margin: 24px 0; display: flex; flex-direction: column; gap: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .phase-row {
+    display: grid;
+    grid-template-columns: 140px 60px 110px 1fr;
+    border-bottom: 1px solid var(--border);
+    align-items: stretch;
+  }
+  .phase-row:last-child { border-bottom: none; }
+  .phase-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 14px 16px;
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    color: var(--text);
+    line-height: 1.4;
+  }
+  .phase-barrier {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 14px 10px;
+    background: var(--bg3);
+    border-right: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+  }
+  .phase-barrier.yes { color: #1d4ed8; font-weight: 500; }
+  .phase-lane {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 14px 10px;
+    background: var(--bg3);
+    border-right: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    text-align: center;
+    line-height: 1.5;
+  }
+  .phase-lane.bound { color: #6d28d9; font-weight: 500; }
+  .phase-desc {
+    padding: 14px 18px;
+    font-size: 14px;
+    font-weight: 300;
+    color: var(--text);
+    line-height: 1.7;
+  }
+
+  /* ── Leaf types ── */
+  .leaf-grid { margin: 24px 0; display: flex; flex-direction: column; gap: 10px; }
+  .leaf-row {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 16px;
+    padding: 14px 18px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg2);
+    align-items: start;
+  }
+  .leaf-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+    line-height: 1.4;
+    padding-top: 2px;
+  }
+  .leaf-desc { font-size: 14px; font-weight: 300; color: var(--text); line-height: 1.7; }
+
+  /* ── Summary card ── */
+  .summary-card {
+    background: var(--text);
+    color: var(--bg);
+    border-radius: 12px;
+    padding: 40px;
+    margin-top: 64px;
+  }
+  .summary-card h2 {
+    font-family: 'Fraunces', serif;
+    font-size: 24px;
+    font-weight: 300;
+    font-style: italic;
+    margin-bottom: 28px;
+    color: var(--bg);
+    opacity: 0.9;
+  }
+  .summary-row {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 16px;
+    padding: 14px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    align-items: start;
+  }
+  .summary-row:last-child { border-bottom: none; }
+  .sum-step {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    opacity: 0.6;
+    line-height: 1.6;
+    padding-top: 2px;
+  }
+  .sum-q { font-size: 14px; font-weight: 300; color: var(--bg); opacity: 0.88; line-height: 1.7; }
+  .sum-out {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    color: var(--bg);
+    opacity: 0.5;
+    margin-top: 4px;
+    line-height: 1.5;
+  }
+
+  /* ── Closing note ── */
+  .closing {
+    margin-top: 40px;
+    padding: 24px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 8px;
+    font-size: 13.5px;
+    font-weight: 300;
+    color: var(--bg);
+    opacity: 0.8;
+    line-height: 1.75;
+  }
+
+  hr { border: none; border-top: 1px solid var(--border); margin: 56px 0; }
+
+  code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    padding: 1px 6px;
+    border-radius: 3px;
+    color: var(--text);
+  }
+
+  /* ── Warp families ── */
+  .warp-families { margin: 28px 0; display: flex; flex-direction: column; gap: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .warp-family { border-bottom: 1px solid var(--border); }
+  .warp-family:last-child { border-bottom: none; }
+  .wf-header {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    align-items: stretch;
+    cursor: pointer;
+    background: var(--bg2);
+    transition: background 0.15s;
+  }
+  .wf-header:hover { background: var(--bg3); }
+  .wf-name {
+    padding: 14px 18px;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .wf-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .wf-prims {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 2px;
+  }
+  .wf-prim {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .wf-when { padding: 14px 18px; font-size: 14px; font-weight: 300; color: var(--text); line-height: 1.7; display: flex; align-items: center; }
+  .wf-body { padding: 0 18px 16px 18px; font-size: 14px; font-weight: 300; color: var(--text); line-height: 1.75; background: var(--bg); border-top: 1px solid var(--border); display: none; }
+  .wf-body.open { display: block; padding-top: 14px; }
+  .wf-body p { margin-bottom: 10px; }
+  .wf-body p:last-child { margin-bottom: 0; }
+  .wf-body strong { font-weight: 500; }
+
+  .warp-intro { margin: 0 0 20px; padding: 14px 18px; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-weight: 300; line-height: 1.75; color: var(--text); }
+  .warp-intro strong { font-weight: 500; }
+
+  /* ── Optional / advanced section ── */
+  .opt-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 18px;
+    background: var(--c-3-bg);
+    border: 1px dashed var(--c-3-bd);
+    border-radius: 8px 8px 0 0;
+    border-bottom: none;
+    margin-bottom: 0;
+  }
+  .opt-banner-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--c-3);
+  }
+  .opt-banner-desc {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .section.opt-section {
+    border: 1px dashed var(--c-3-bd);
+    border-radius: 0 0 8px 8px;
+    padding: 28px 28px 32px;
+    background: var(--c-3-bg);
+    margin-bottom: 64px;
+  }
+  .section.opt-section .section-head {
+    border-bottom-color: var(--c-3-bd);
+  }
+  .b-opt {
+    color: var(--c-3);
+    border-color: var(--c-3-bd);
+    background: white;
+    border-style: dashed;
+  }
+  .fb-opt {
+    color: var(--c-3);
+    border-color: var(--c-3-bd);
+    background: var(--c-3-bg);
+    border-style: dashed;
+    opacity: 0.85;
+  }
+  .phase-barrier.async { color: #1d4ed8; font-weight: 500; font-style: italic; }
+
+  /* ── Margin notes ── */
+  .section { position: relative; }
+  .margin-note {
+    position: absolute;
+    left: calc(100% + 56px);
+    top: 4px;
+    width: 148px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 10.5px;
+    font-weight: 300;
+    line-height: 1.6;
+    color: #9c3328;
+    opacity: 0.82;
+  }
+  .margin-note-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #c0392b;
+    opacity: 0.6;
+    display: block;
+    margin-bottom: 4px;
+  }
+  @media (max-width: 960px) { .margin-note { display: none; } }
+
+  /* ── Granularity table ── */
+  .gran-table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 13.5px; }
+  .gran-table th {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 2px solid var(--border2);
+    background: var(--bg2);
+  }
+  .gran-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+    line-height: 1.6;
+    font-weight: 300;
+  }
+  .gran-table tr:last-child td { border-bottom: none; }
+  .gran-table td:first-child {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+  }
+  .gran-tag {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    padding: 2px 7px;
+    border-radius: 3px;
+    border: 1px solid;
+    margin-top: 4px;
+  }
+  .gran-tag-forced { color: var(--c-3); border-color: var(--c-3-bd); background: var(--c-3-bg); }
+  .gran-tag-hw     { color: var(--c-4); border-color: var(--c-4-bd); background: var(--c-4-bg); }
+  .gran-tag-free   { color: var(--c-1a); border-color: var(--c-1a-bd); background: var(--c-1a-bg); }
+  .gran-tag-area   { color: #854d0e; border-color: #fde047; background: #fefce8; }
+  .gran-tag-reduce { color: #991b1b; border-color: #fca5a5; background: #fef2f2; }
+  .gran-dim-note   { font-family: 'DM Sans', sans-serif; font-weight: 300; font-size: 11px; color: var(--muted); display: block; margin-top: 2px; }
+
+  /* ── Feeds-into callout ── */
+  .feeds-into {
+    background: var(--c-4-bg);
+    border-left: 3px solid var(--c-4-bd);
+    border-radius: 0 6px 6px 0;
+    padding: 10px 16px;
+    margin: 16px 0 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    color: var(--c-4);
+    line-height: 1.7;
+  }
+  .feeds-into strong { font-weight: 500; }
+
+  /* ── Code step badge ── */
+  .b-code { color: var(--muted); border-color: var(--border2); background: var(--bg3); }
+
+  /* ── Fill-in tables ── */
+  .fill-table-wrap { margin: 28px 0; overflow-x: auto; }
+  .fill-table-wrap-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 500; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--c-2); display: block; margin-bottom: 8px;
+  }
+  .fill-table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 600px; }
+  .fill-table th {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 500;
+    letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted);
+    padding: 8px 12px; text-align: left; border-bottom: 2px solid var(--border2);
+    background: var(--bg2);
+  }
+  .fill-table td {
+    padding: 10px 12px; border-bottom: 1px solid var(--border);
+    vertical-align: top; line-height: 1.6; font-weight: 300;
+  }
+  .fill-table tr:last-child td { border-bottom: none; }
+  .fill-table td.ft-field {
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 500;
+    color: var(--text); white-space: nowrap; background: var(--bg2);
+    border-right: 1px solid var(--border);
+  }
+  .fill-table td.ft-eg {
+    background: var(--bg3); color: var(--muted); font-style: italic;
+    border-right: 1px solid var(--border); font-size: 13px;
+  }
+  .fill-table td.ft-yours {
+    background: white; color: var(--border2); font-style: italic; font-size: 13px;
+  }
+
+  /* ── Code cell (multi-line code inside table cells) ── */
+  .cc {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-style: normal;
+    line-height: 1.75; white-space: pre;
+    display: block; color: var(--text);
+  }
+
+  /* ── IDE view ── */
+  .ide-wrap { margin: 32px 0; border-radius: 10px; overflow: hidden; border: 1px solid #2d2d2d; }
+  .ide-header { background: #252526; padding: 0 16px; display: flex; align-items: flex-end; gap: 2px; border-bottom: 1px solid #1a1a1a; }
+  .ide-tab { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #cccccc; background: #1e1e1e; padding: 7px 16px 6px; border-top: 1px solid #007acc; display: inline-block; }
+  .ide-tab.inactive { background: #2d2d2d; color: #969696; border-top-color: transparent; }
+  .ide-body { background: #1e1e1e; padding: 20px 24px 28px; overflow-x: auto; }
+  .ide-body pre { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; line-height: 2; color: #d4d4d4; margin: 0; white-space: pre; }
+  .ide-ph  { color: #6a9955; font-style: italic; }
+  .ide-src { color: #9cdcfe; font-style: italic; }
+  .ide-kw  { color: #c586c0; }
+  .ide-ty  { color: #4ec9b0; }
+  .ide-fn  { color: #dcdcaa; }
+  .ide-op  { color: #d4d4d4; }
+  .ide-num { color: #b5cea8; }
+  .ide-absent { color: #555555; font-style: italic; }
+
+  @media (max-width: 600px) {
+    .masthead h1 { font-size: 32px; }
+    .def-row, .hier-row, .col-q-row, .phase-row, .leaf-row { grid-template-columns: 1fr; }
+    .hier-level, .hier-mem, .col-q-name, .phase-name, .phase-barrier, .phase-lane { border-right: none; border-bottom: 1px solid var(--border); }
+    .summary-row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ══ MASTHEAD ══ -->
+  <div class="masthead">
+    <h1>My Current Mental Model<br><em>of GPU Hierarchy</em></h1>
+    <p class="masthead-sub">The logic in this document came from 7 weeks of kernels breaking the framework. Each one broke something I thought was general. The formatting is from an LLM. This is v8 of a mental model that is still changing.</p>
+  </div>
+
+  <!-- ══ PROVENANCE NOTE ══ -->
+  <div style="
+    margin: -24px 0 48px;
+    padding: 18px 22px;
+    background: var(--bg2);
+    border: 1px solid var(--border2);
+    border-left: 4px solid var(--c-ac-bd);
+    border-radius: 0 8px 8px 0;
+    font-size: 14px;
+    font-weight: 300;
+    color: var(--text);
+    line-height: 1.75;
+  ">
+    <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:8px;">📓 Note on this document</span>
+    The framework logic here came from tracing index bugs in tiled GEMM, dense attention, and paged KV MLA. Each new kernel broke something I thought was general. I found the minimal fix each time, and the framework is what accumulated across those fixes. The CSS, tables, and prose structure were generated by an LLM from my bullet-point notes. I've done a pass to align the voice. This is a <strong>bookmark</strong> — a clean snapshot of v8. It will change.
+  </div>
+
+  <!-- ══ FLOW BAR ══ -->
+  <div class="flowbar">
+    <div class="flowbar-label">The sequence at a glance</div>
+    <span class="fb-pill fb-1a">1a · Dimension Fate</span>
+    <span class="fb-arr">→</span>
+    <span class="fb-pill fb-ac">↳ Algorithm Classification</span>
+    <span class="fb-arr">→</span>
+    <span class="fb-pill fb-1b">1b · Access Patterns</span>
+    <span class="fb-arr">→</span>
+    <span class="fb-pill fb-2">2 · Binding Table</span>
+    <span class="fb-arr">→</span>
+    <span class="fb-pill fb-4">4a · Lifetime (block)</span>
+    <span class="fb-arr">→</span>
+    <span class="fb-pill fb-3">3 · FSM</span>
+    <span class="fb-arr">→</span>
+    <span class="fb-pill fb-opt">opt · Pipeline</span>
+    <span class="fb-arr">→</span>
+    <span class="fb-pill fb-4">4b · Lifetime (thread)</span>
+    <span class="fb-arr">→</span>
+    <span class="fb-pill fb-5">5 · Index Trees</span>
+    <span class="fb-arr">→</span>
+    <span class="fb-pill fb-code">Code Derivation</span>
+  </div>
+
+  <!-- ══ INTRO ══ -->
+  <div class="intro">
+    <p>When we write a GPU kernel, two separate sets of decisions are happening at the same time. One is about the <strong>algorithm</strong> — what mathematical operation is being performed, and how does it work? The other is about the <strong>architecture</strong> — where does each piece of data live during execution, which threads handle which work, and when does data move between memory levels?</p>
+    <p>When we often start learning parallel computing, we often focuse entirely on the first set and guessed at the second. That produces kernels that give correct answers but run far slower than the hardware is capable of. The data lives in the wrong places, moves at the wrong times, and gets shared through the wrong channels.</p>
+    <p>This framework is a structured way to make those architectural decisions on paper before writing any code. It covers kernels where every contracted dimension uses an associative and commutative operator — which turns out to be a wide and important class. Each question builds directly on the answers before it. By the time we open our editor, every structural decision is already made. We're just translating a completed design into code.</p>
+<p>The framework has five numbered steps, but Step 1 has a decision point in the middle. We work through Step 1a, make a classification decision, then complete Step 1b. Understanding <strong>why the steps are in this order</strong> is what makes the framework work on kernels we've never seen before. That's what I've tried to explain here.</p>
+
+  <div class="concept c-rule" style="margin: 0 0 56px;">
+    <span class="concept-label">Framework scope — the algebraic property that makes derivation mechanical</span>
+    <p>I've used this framework to derive kernel architectures for operations where every REDUCE dimension uses an associative and commutative operator — specifically vector add, transpose, shared reduced sum, GEMM, dense attention, paged KV MLA, and sparse attention. The operators that fit this pattern include addition, multiplication, max, min, bitwise AND/OR/XOR, dot product, and online softmax merge — any body where partial results can be combined in any order and produce the same final answer.</p>
+    <p>That algebraic property is what makes the derivation mechanical. Because partial results can be combined in any order, the framework can assign REDUCE dimensions to any level of the hierarchy — warp shuffle, block merge, or sequential thread-private accumulator — and the partial results compose consistently regardless of which threads produced them. The binding table, FSM, lifetime tables, and index trees all follow from this single property. Without it, the derivation method breaks down.</p>
+    <p>If a REDUCE dimension uses an operator that isn't associative and commutative — subtraction, selection (top-K), scan (prefix sum) — the framework is probably at its edge for that operation. Those tend to require different phase structures and intermediate tensors that the binding table isn't set up to derive. Catching that at Step 1a saves a lot of wasted work further in.</p>
+  </div>
+
+  <hr>
+
+  <!-- ══ STEP 1a ══ -->
+  <div class="section">
+    <div class="margin-note">
+      <span class="margin-note-label">hardware</span>
+      AREA dims cost zero inter-block sync — blocks never communicate. REDUCE dims must touch sync hardware: shuffles, barriers, or atomics to combine partial results.
+    </div>
+    <div class="section-head">
+      <div class="badge b-1a">Step<br>1a</div>
+      <div class="section-head-text">
+        <h2>Dimension Fate</h2>
+        <div class="section-q">"What does the math do to each dimension — does it survive into the output, or disappear?"</div>
+      </div>
+    </div>
+
+    <div class="prose">
+      <p>This is always the first thing we do with any tensor operation. We don't think about threads yet, we don't think about memory yet — we look only at the mathematical operation and ask a single precise question about each dimension: <strong>does this dimension appear in the output tensor, or does it get consumed by the computation?</strong></p>
+
+      <p>To answer this, write down the shape of every input tensor and the shape of every output tensor. Then go through each dimension by name and find it in the output. It's either there, or it isn't.</p>
+    </div>
+
+    <div class="callout">
+      <strong>What counts as an output tensor?</strong> Only tensors that are written to global memory at the end of the kernel. If the operation produces an intermediate value that is consumed within the same kernel and never written out — a running max for numerical stability, a partial dot product, a row sum used to normalize — it is an <em>internal intermediate</em>, not an output tensor. Do not list it here. Internal intermediates appear later as state variables in the REDUCE dimension's description, or as temporary smem buffers in Step 2. If we're unsure whether something is an output or an intermediate, ask: "does the caller of this kernel read this value?" If yes, it is an output. If no, it is an intermediate.
+    </div>
+
+    <div class="concept c-area">
+      <span class="concept-label">Survived dimensions — AREA</span>
+      <p>A dimension that appears in the output is called an <strong>AREA</strong> dimension. It means the operation produces one independent result for every position along this dimension. Computing the result at position 3 requires no knowledge of what happened at position 7. These positions are completely independent of each other.</p>
+      <p>This independence is valuable because it means we can assign different blocks of threads to different positions along an AREA dimension, and those blocks never need to communicate. AREA dimensions are what make parallelism cheap.</p>
+    </div>
+
+    <div class="concept c-reduce">
+      <span class="concept-label">Contracted dimensions — REDUCE</span>
+      <p>A dimension that does <em>not</em> appear in the output is called a <strong>REDUCE</strong> dimension. It means all the values along that dimension are being combined into a smaller result — summed, compared, selected from, or otherwise collapsed. The dimension gets consumed by the computation.</p>
+      <p>We can still parallelize along a REDUCE dimension, but the parallelism costs something: the threads that processed different pieces of it must eventually share their partial results and combine them. This combination step is called a <em>reduction</em>, and it requires synchronization. REDUCE dimensions are what make GPU design interesting.</p>
+    </div>
+
+    <div class="prose">
+      <p>Once we have identified every REDUCE dimension, write down the <strong>reduction body</strong> for each one in plain language — the specific operation that combines elements along that dimension. Is it addition? A maximum? A comparison-and-swap? A heap insertion? Be specific, because the body operation determines what state variable a thread needs to carry through the computation.</p>
+
+      <p>That <strong>state variable</strong> is the piece of information a thread holds from one element to the next as it processes a REDUCE dimension. For a running sum, the state variable is a single number initialized to zero. For a running maximum, it's a single number initialized to negative infinity. For a heap-based selection, it's the heap itself — an array of k slots, each holding a (value, position) pair. Write down the type of the state variable and how it's initialized, because this will appear directly in later steps.</p>
+    </div>
+
+    <div class="callout">
+      <strong>A common mistake:</strong> skipping the state variable description because "it's obvious." It rarely is, and the state variable type is what determines how much register space a thread needs and whether the reduction can be done with warp shuffles or requires shared memory. Write it down explicitly.
+    </div>
+
+    <div class="concept c-rule">
+      <span class="concept-label">Reduction character — the single gate before continuing</span>
+      <p>Alongside the reduction body and state variable, verify the <strong>reduction character</strong> of each REDUCE dimension. This framework covers exactly one character:</p>
+      <p><strong>Parallel — the only character this framework handles.</strong> The body operation is associative and commutative. This means any two partial results can be combined in any order and produce the same final answer. This algebraic property is what makes the binding table, FSM, and warp shuffle derivation mechanical: because order of combination doesn't matter, we can freely assign slices of the REDUCE dimension to different threads, warps, and blocks without coordinating which slice each one processes. Warp shuffle reductions, block-level binary trees through shared memory, and sequential thread-private accumulators are all correct implementations of the same associative+commutative reduction — the framework tells us which level to use and how to connect them. Common bodies with this character: addition, max, min, product, bitwise AND/OR/XOR, dot product, online softmax merge (the fmaxf + rescaled sum combination), and any weighted sum.</p>
+      <p>If a REDUCE dimension is <strong>not</strong> associative and commutative — for example, selection (top-K, argmax) or scan (prefix sum, running count) — the framework is probably at its edge for that operation. Those use different parallel algorithms (warp min-heaps, radix select, Blelloch scan) that introduce intermediate tensors and phase structures I haven't been able to fit into this derivation. They're worth a different starting point.</p>
+    </div>
+
+    <div class="callout">
+      <strong>Quick character lookup — parallel bodies covered by this framework:</strong>
+      <br><br>
+      <strong>Parallel (proceed):</strong> sum · product · max · min · bitwise AND/OR/XOR · count of matching elements · weighted sum · dot product · online softmax merge (max + rescaled sum) · any body where partial results can be combined in any order regardless of which threads produced them.
+      <br><br>
+      <strong>Not sure?</strong> Ask: "if I give two threads half the data each, can they each produce a partial result that I can combine afterward without needing to see the full dataset?" If yes, parallel — proceed. If the merge step requires knowing the full dataset (e.g. the k-th boundary score in selection, or all prior outputs in a scan), that operation is likely outside what this derivation can handle — worth noting before going further.
+    </div>
+
+    <div class="feeds-into">
+      <strong>Feeds into final step →</strong> Symbol legend (state variable names and init values, one row per REDUCE dim) · Phase skeleton (COMPUTE phase content: the accumulation body) · Declaration table (register state variable declarations)
+    </div>
+  </div>
+
+  <!-- ══ ALGORITHM CLASSIFICATION ══ -->
+  <div class="section">
+    <div class="margin-note">
+      <span class="margin-note-label">hardware</span>
+      Family selects the hardware unit: tensor cores, warp shuffle tree, or scalar FP units. The wrong family can mean a 10× or greater slowdown.
+    </div>
+    <div class="section-head">
+      <div class="badge b-ac">Pivot<br>Inside<br>Step 1</div>
+      <div class="section-head-text">
+        <h2>Algorithm Classification</h2>
+        <div class="section-q">"Which algorithm family implements this reduction, and what does the output need to satisfy?"</div>
+      </div>
+    </div>
+
+    <div class="concept c-pivot">
+      <span class="concept-label">Why this fires here — not at the beginning</span>
+      <p>This decision needs two things as input: the body operation of the REDUCE dimension (what are we combining?), and the relative sizes of the dimensions involved (how much data is being reduced, and how large is the result?). Neither of those is available before Step 1a. We can't classify the algorithm before we know what the algorithm is doing.</p>
+      <p>This decision also needs to happen <em>before</em> Step 1b, because the algorithm we choose determines which tensors exist in your kernel. A multi-pass algorithm has intermediate tensors that a single-pass algorithm doesn't. Analyzing access patterns before knowing which algorithm we're using means you might analyze the wrong tensors entirely.</p>
+    </div>
+
+    <div class="prose">
+      <p>Look at the REDUCE dimension and its body operation — which we have already verified is associative and commutative. Ask yourself: is there a known algorithm family that implements this body efficiently on a GPU? Most parallel reductions fall into one of a small number of families. Simple reductions — sum, min, max — use a parallel reduction tree. Matrix multiplications use tiled GEMM. Attention uses fused online softmax. Each family has its own well-studied structure that determines what intermediate tensors exist and how the FSM phases are ordered.</p>
+
+      <p>For each candidate family, consider the relevant problem dimensions. If there are multiple family options, the right one is usually determined by a ratio or threshold — the size of the output relative to the size of the input, the sparsity of the data, or a threshold below which one approach dominates and above which another does. Write down the ratio, compute it with your actual dimension sizes, and commit to a specific family. Then name it explicitly at the top of your derivation.</p>
+
+      <p>Not recognizing an algorithm family for the operation is a useful signal — it's happened to me several times during this competition, and it usually means the algorithmic landscape for that problem is worth understanding before the derivation starts. The framework takes over once a family is chosen, but the choice itself has to come from somewhere outside it.</p>
+    </div>
+
+    <div class="callout">
+      <strong>Common algorithm families — parallel reductions only.</strong> All entries below have associative and commutative reduction bodies. Match your reduction body to the closest entry, then use the listed family name in your derivation record. Operations outside this list (prefix scan, selection/top-K, sort) are outside this framework's scope.
+      <br><br>
+      <strong>Parallel reduction (sum / max / min / AND / OR):</strong> Family = parallel reduction tree. Warp-level: shuffle-down. Block-level: binary tree through smem. No intermediate tensors.
+      <br><br>
+      <strong>Matrix multiply (C = A × B, reduction over inner dimension K):</strong> Family = tiled GEMM. Tiles of A and B staged in smem; each thread accumulates a private output tile. No intermediate tensors unless split-K is used.
+      <br><br>
+      <strong>Attention (softmax-weighted sum of V, reduction over sequence length J and head dim K):</strong> Family = Flash Attention (fused online softmax). Intermediate tensors: running state (m, l, o) in registers per query; per-tile scores in smem. No S[N,N] matrix. The online softmax merge — fmaxf + rescaled sum — is parallel character.
+      <br><br>
+      <strong>Softmax (normalize a vector, reduction over the vector dimension):</strong> Family = two-pass (max then exp+sum) or online single-pass. Intermediate tensors: row max and row sum if two-pass; online state (m, l) if single-pass.
+      <br><br>
+      <strong>Layer norm / RMS norm (normalize across hidden dim):</strong> Family = two-pass reduction (mean/variance then normalize). Intermediate tensors: mean, variance per row.
+      <br><br>
+      <strong>Histogram (count occurrences, reduction over input positions):</strong> Family = privatized histogram (one histogram copy per warp or block, then merge). Warp primitive: match (__match_any_sync) to avoid serialization at bin collisions.
+      <br><br>
+      <strong>Convolution (sum over kernel spatial positions and input channels):</strong> Family = direct tiled convolution (like GEMM but with filter reuse) or implicit GEMM (reshape to matrix multiply). Choose based on whether input padding is needed and filter size.
+    </div>
+
+    <div class="prose">
+      <p><strong>Output contract.</strong> Before moving on, also write down what properties the output must satisfy beyond just having the right shape. These constraints are part of the problem specification but are easily forgotten until they surface as bugs late in development. Does the output need to be sorted in a particular order? Do values need to sum to one, indicating renormalization is required? Is the output a single randomly sampled index rather than a set of values? Does the operation need to be numerically stable or deterministic across runs? Whatever the answer, write it down — then immediately name the FSM phase each constraint generates. A renormalization requirement becomes a NORMALIZE phase. A sort requirement becomes a SORT phase before STORE. A numerical-stability contract becomes a running-max initialization in INIT. Recording the contract and the phase it produces together prevents the class of bug where a contract requirement is written down in Algorithm Classification and then forgotten before Step 3.</p>
+    </div>
+
+    <div class="fill-table-wrap">
+      <span class="fill-table-wrap-label">What this step produces — fill in one row per REDUCE dimension</span>
+      <table class="fill-table">
+        <thead>
+          <tr>
+            <th>Field</th>
+            <th>Example — tiled GEMM</th>
+            <th>Example — FlashInfer sparse attention</th>
+            <th>Your kernel — what to write here</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="ft-field">Algorithm family</td>
+            <td class="ft-eg">tiled GEMM (outer-product accumulation)</td>
+            <td class="ft-eg">block-sparse Flash Attention (fused online softmax over nonzero KV blocks only)</td>
+            <td class="ft-yours">Which named family from the reference list handles your REDUCE body? Commit to one name explicitly — "tiled GEMM", "parallel reduction tree", "Flash Attention", etc. All families must have parallel-character reductions.</td>
+          </tr>
+          <tr>
+            <td class="ft-field">Intermediate tensors</td>
+            <td class="ft-eg">none — accumulation is register-private</td>
+            <td class="ft-eg">kv_indices[nnz_blocks] — sparse KV block index array (lookup leaf for j); row_ptr[num_q_blocks+1] — CSR row pointers; score_smem[T_J] per tile; (m, l, o) softmax state in registers</td>
+            <td class="ft-yours">List every tensor your chosen family introduces that was not in the input/output list. These must appear in Step 1b's access pattern table. Write "none" if the family adds no new tensors.</td>
+          </tr>
+          <tr>
+            <td class="ft-field">Output contract</td>
+            <td class="ft-eg">C[m,n] = Σₖ A[m,k]·B[k,n]; no normalization; FP associativity acceptable</td>
+            <td class="ft-eg">O[q,:] = normalized sparse-softmax-weighted sum over attended KV positions only; weights sum to 1 over attended set; numerically stable via running max subtraction</td>
+            <td class="ft-yours">What properties must the output satisfy beyond shape? Be specific. Vague "correct values" is not useful. Include normalization, ordering, stability, and determinism requirements.</td>
+          </tr>
+          <tr>
+            <td class="ft-field">FSM phases from contract</td>
+            <td class="ft-eg">STORE only (no normalization or ordering required)</td>
+            <td class="ft-eg">NORMALIZE (÷l_acc for softmax), INIT with m=−∞ (numerical stability), SPARSE_ITER phase (walk kv_indices[row_ptr[q]:row_ptr[q+1]] instead of sequential j tiles)</td>
+            <td class="ft-yours">For each contract requirement, name the FSM phase it generates. Every phase named here must appear in Step 3's FSM table — this list seeds the phase sequence.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="feeds-into">
+      <strong>Feeds into final step →</strong> Phase skeleton (tile loop structure from family; novel phase rows from FSM phases column) · Declaration table (intermediate tensor declarations) · Index expression table (intermediate tensor accesses must be analyzed)
+    </div>
+  </div>
+  <div class="section">
+    <div class="margin-note">
+      <span class="margin-note-label">hardware</span>
+      Arithmetic leaves enable coalescing and prefetch. Lookup leaves add a full extra memory round-trip (~200 cycles). Type-conv leaves cost one instruction per element access.
+    </div>
+    <div class="section-head">
+      <div class="badge b-1b">Step<br>1b</div>
+      <div class="section-head-text">
+        <h2>Access Patterns</h2>
+        <div class="section-q">"How is each tensor actually read or written — what kind of indexing does each dimension use?"</div>
+      </div>
+    </div>
+
+    <div class="prose">
+      <p>With the algorithm chosen, we can complete the geometry step by examining how each tensor is accessed. For every dimension of every tensor — inputs, outputs, and any intermediate tensors your chosen algorithm introduces — we assign a <strong>leaf type</strong> that describes how the index into that dimension is computed. This classification matters because different leaf types have different performance characteristics and generate different code.</p>
+    </div>
+
+    <div class="callout">
+      <strong>Two categories of leaves.</strong> Every index expression contains two kinds of leaves: <em>execution leaves</em> that describe how an address is computed from thread and loop variables, and <em>value leaves</em> that describe what happens to the data once we reach it. Classify both for every access.
+    </div>
+
+    <div class="leaf-grid">
+      <div class="leaf-row">
+        <div class="leaf-name" style="color:#1e3a8a">— Execution leaves —</div>
+        <div class="leaf-desc" style="color:var(--muted);font-style:italic">Describe how the physical address is computed from execution context.</div>
+      </div>
+      <div class="leaf-row">
+        <div class="leaf-name">Arithmetic</div>
+        <div class="leaf-desc">The address is a linear combination of execution variables: <code>base + i₁·s₁ + i₂·s₂ + …</code> using only addition and multiplication. The default and best case — the hardware can predict these accesses and adjacent threads often access adjacent memory (coalescing). Example: <code>A[row * K + col]</code> where both row and col are computed from thread/block indices.</div>
+      </div>
+      <div class="leaf-row">
+        <div class="leaf-name">Composite</div>
+        <div class="leaf-desc">A 1D flat index is unpacked into 2D (or higher) coordinates using integer division and modulo: <code>row = idx / N, col = idx % N</code>. Used when threads are linearized (e.g. <code>tid = ty·blockDim.x + tx</code>) but smem is indexed in 2D. Division and modulo cost extra instructions but do not add memory round-trips. This is the Flatten→Stride→Unflatten pattern used in cooperative smem loads: flatten thread coordinates into a single <code>tid</code>, stride it across the buffer, then unflatten back to 2D smem indices. Concrete example: for a tile <code>A_smem[BK][BM]</code> and thread index <code>tid</code>, the mapping is <code>row = tid / BM</code> (K dimension, 0..BK-1) and <code>col = tid % BM</code> (M dimension, 0..BM-1), giving <code>A_smem[row][col] = A[global_row * K + global_col]</code>.</div>
+      </div>
+      <div class="leaf-row">
+        <div class="leaf-name">Lookup</div>
+        <div class="leaf-desc">The physical address cannot be computed directly — we must first read an index array to obtain it: <code>global_array[ index_array[arithmetic_expr] ]</code>. Lookup leaves add a full extra memory round-trip (~200 cycles) before the real data access and prevent hardware prefetching. Record them explicitly — each one surfaces as a design concern in Step 2 and as an indirection row in the index expression table. Example: <code>K[ kv_indices[row_ptr[q] + tile] · T_J + j ]</code> in sparse attention.</div>
+      </div>
+      <div class="leaf-row">
+        <div class="leaf-name" style="color:#1e3a8a">— Value leaves —</div>
+        <div class="leaf-desc" style="color:var(--muted);font-style:italic">Describe what happens to the value at the computed address.</div>
+      </div>
+      <div class="leaf-row">
+        <div class="leaf-name">Type conversion</div>
+        <div class="leaf-desc">The data is stored in one numeric type but computed in another. A conversion instruction executes on every element access. Common in neural network kernels where weights are stored in FP8 or FP16 but computations occur in float32. When we identify a type-conversion leaf, note the storage type, the computation type, and the conversion — it will appear explicitly in the COMPUTE phase of the FSM. Example: <code>__half2float(A_fp16[row * K + col])</code>.</div>
+      </div>
+      <div class="leaf-row">
+        <div class="leaf-name">Conditional</div>
+        <div class="leaf-desc">A runtime condition determines whether the access happens at all: <code>condition ? value : default</code>. Two distinct placements follow — the placement is determined by the triggering iterator, not by the condition itself.
+          <br><br>
+          <strong>Grid-level conditional → early exit (Bounds Check phase).</strong> If the triggering iterator is a grid-level dimension (blockIdx), place a cheap early-exit guard at the start of the kernel before any shared memory is touched.
+          <br><br>
+          <strong>Tile-level conditional → predicated load (inside the tile loop).</strong> If the triggering iterator is a tile loop variable at Block or Warp granularity, the response is a predicated load or store inside the loop — never an early exit. An early exit here would leave other threads waiting at a subsequent <code>__syncthreads()</code> that is never reached, causing a deadlock.
+        </div>
+      </div>
+    </div>
+
+    <div class="callout">
+      <strong>Compound index expressions.</strong> An index can contain multiple leaf types in the same expression — a lookup leaf wrapping composite and arithmetic leaves is common in paged systems. When this happens, classify the <em>entire access</em> by the highest-cost execution leaf present, using this priority: Lookup &gt; Conditional &gt; Type conversion &gt; Composite &gt; Arithmetic. A single lookup leaf makes the whole access a lookup-access regardless of the arithmetic around it. Record the lookup leaf explicitly because each one adds a full extra memory round-trip before the real data is reached.
+    </div>
+
+    <div class="prose">
+      <p>Work through every tensor systematically and don't assume any dimension is arithmetic without checking. A dimension that appears simple at first might actually require a lookup, and missing that will mean missing a significant design concern before we've written any code. By the end of Step 1b, we have a complete picture of what your kernel needs to compute — the dimension fates, the chosen algorithm, the output contract, and the access structure of every tensor involved.</p>
+    </div>
+
+    <div class="feeds-into">
+      <strong>Feeds into final step →</strong> Index expression table (leaf type per access selects the formula column — arithmetic AREA uses the cascade pattern, REDUCE into smem uses Flatten→Stride→Unflatten, lookup adds an indirection row, conditional adds a predicate column)
+    </div>
+  </div>
+
+  <!-- ══ STEP 2 ══ -->
+  <div class="section">
+    <div class="margin-note">
+      <span class="margin-note-label">hardware</span>
+      Smem: 48–164 KB per SM, split among all resident blocks — smem size directly controls occupancy. Registers: ~255 per thread; more registers = fewer active warps. Warp primitives: register-to-register, no memory traffic, no barrier.
+    </div>
+    <div class="section-head">
+      <div class="badge b-2">Step<br>2</div>
+      <div class="section-head-text">
+        <h2>The Binding Table</h2>
+        <div class="section-q">"Where in the GPU's execution hierarchy does each dimension live, and who is responsible for it?"</div>
+      </div>
+    </div>
+
+    <div class="prose">
+      <p>This is the most important design step in the framework. Everything up to this point was about understanding the problem. Step 2 is about designing the solution — specifically, assigning each dimension of your operation to a level of the GPU's execution hierarchy.</p>
+
+      <p>To fill in the Binding Table, we first need to understand what that hierarchy actually is. Think of it like a company with a very specific org chart, where each level has its own workspace that only people at that level can access.</p>
+    </div>
+
+    <div class="hierarchy">
+      <div class="hier-row">
+        <div class="hier-level">Grid</div>
+        <div class="hier-mem">Global mem</div>
+        <div class="hier-desc">The whole GPU working on your problem. All blocks can read and write global memory, but it is large and slow — like a warehouse across town. Global memory is where inputs come from and where final outputs go. Blocks in the grid never communicate directly with each other during a kernel; they only coordinate through global memory before or after execution.</div>
+      </div>
+      <div class="hier-row">
+        <div class="hier-level">Block</div>
+        <div class="hier-mem">Shared mem</div>
+        <div class="hier-desc">A group of threads that share a fast private whiteboard — shared memory. It's much faster than global memory but small (typically 48–164 KB) and visible only within one block. When threads in the same block need to share intermediate results, shared memory is how they do it. Reading from shared memory after another thread wrote to it requires a <code>__syncthreads()</code> barrier.</div>
+      </div>
+      <div class="hier-row">
+        <div class="hier-level">Warp</div>
+        <div class="hier-mem">Warp prims</div>
+        <div class="hier-desc">Groups of exactly 32 threads that execute in hardware lockstep — when one thread executes an instruction, all 32 do simultaneously. This lockstep enables a family of collective operations — shuffles, votes, matches, and matrix ops — that work register-to-register with no shared memory and no barrier. Reductions are just one member of this family; the warp is a general collective execution unit.</div>
+      </div>
+      <div class="hier-row">
+        <div class="hier-level">Thread</div>
+        <div class="hier-mem">Registers</div>
+        <div class="hier-desc">Each individual worker with a private notepad — registers. Registers are the fastest memory on the chip and are completely private. State variables, loop accumulators, and intermediate values that belong to one thread's computation live here. The state variable you identified in Step 1a lives in registers during the REDUCE phase.</div>
+      </div>
+    </div>
+
+    <div class="callout">
+      <strong>What tiling means, and when a dimension supports it.</strong> Tiling means processing a large dimension in fixed-size chunks rather than all at once, so that each chunk fits in a faster memory level. A dimension supports tiling when processing one chunk either produces a complete independent result, or produces a partial result that combines correctly with partial results from other chunks. For a REDUCE dimension like K in GEMM, each tile of K contributes a partial dot product to the accumulator — the partial results sum correctly, so K is tileable. For an AREA dimension like M, each tile of M produces independent output rows that don't interact at all — trivially tileable. A dimension is <em>not</em> tileable when its chunks cannot be processed independently and cannot produce combinable partial results — for example, a scan dimension where each output depends on all prior outputs.
+    </div>
+
+    <div class="concept c-rule">
+      <span class="concept-label">Granularity — one question that applies at every level</span>
+      <p>Before filling in the four column questions, fill in this table. Add one row for each dimension of your specific operation — carried forward from Step 1a — and record whether each level processes it as <strong>1</strong> (one element) or as <strong>tiled</strong> (a chunk whose size we must choose or is hardware-fixed). Dimensions of the same fate can tile very differently from each other, so each must be reasoned about individually. The Fate column is filled in from Step 1a; the rest we fill in now.</p>
+
+      <table class="gran-table">
+        <thead>
+          <tr>
+            <th>Dimension</th>
+            <th>Fate</th>
+            <th>Grid</th>
+            <th>Block</th>
+            <th>Warp</th>
+            <th>Thread</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>M<span class="gran-dim-note">your dim 1</span></td>
+            <td><span class="gran-tag gran-tag-area">AREA</span></td>
+            <td>all of M<br><span class="gran-tag gran-tag-forced">fixed</span></td>
+            <td>tiled<br><span class="gran-tag gran-tag-forced">budget check forces size</span></td>
+            <td>tiled or 1<br><span class="gran-tag gran-tag-hw">hw-fixed if tensor cores</span></td>
+            <td>1 or can be tiled<br><span class="gran-tag gran-tag-free">nothing forces this</span></td>
+          </tr>
+          <tr>
+            <td>N<span class="gran-dim-note">your dim 2</span></td>
+            <td><span class="gran-tag gran-tag-area">AREA</span></td>
+            <td>all of N<br><span class="gran-tag gran-tag-forced">fixed</span></td>
+            <td>tiled<br><span class="gran-tag gran-tag-forced">budget check forces size</span></td>
+            <td>tiled or 1<br><span class="gran-tag gran-tag-hw">hw-fixed if tensor cores</span></td>
+            <td>1 or can be tiled<br><span class="gran-tag gran-tag-free">nothing forces this</span></td>
+          </tr>
+          <tr>
+            <td>K<span class="gran-dim-note">your dim 3</span></td>
+            <td><span class="gran-tag gran-tag-reduce">REDUCE</span></td>
+            <td>all of K<br><span class="gran-tag gran-tag-forced">fixed</span></td>
+            <td>tiled<br><span class="gran-tag gran-tag-forced">budget check forces size</span></td>
+            <td>tiled or 1<br><span class="gran-tag gran-tag-hw">hw-fixed if tensor cores</span></td>
+            <td>1<br><span class="gran-tag gran-tag-forced">almost always 1</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>Replace M, N, K with your operation's actual dimensions — one row per dimension, in any order. For example, a convolution kernel might use <code>batch</code>, <code>channels</code>, <code>height</code>, <code>width</code>, and <code>kernel_size</code>; an attention kernel might use <code>query</code>, <code>key/value</code>, and <code>head_dim</code>. The table has one row per dimension from Step 1a, no more, no less. Two dimensions with the same AREA fate may still tile differently at the thread level: one may be too small to tile meaningfully, the other large enough to justify a register tile. The Fate column is what connects this table back to Step 1a; the per-row reasoning is what prevents blanket assumptions from hiding those differences. The thread column's free cells are the only ones with no external forcing mechanism — write a deliberate value there before moving on. Step 4b's Lifetime Table will verify it.</p>
+    </div>
+
+    <div class="prose">
+      <p>With granularities recorded, the Binding Table has four columns — one per level. The rows are your dimensions. For each (dimension, column) cell, you answer a specific question about what happens at that level's granularity. Work left to right across the columns for each dimension, because each column's answer often depends on the one to its left.</p>
+    </div>
+
+    <div class="col-questions">
+      <div class="col-q-row">
+        <div class="col-q-name">Grid → Global</div>
+        <div class="col-q-body">
+          Does a block permanently own a fixed slice of this dimension for the entire kernel's execution?
+          <em>For AREA dimensions: usually yes. Assign blockIdx.x or blockIdx.y to this dimension. One block, one slice, owned forever. For REDUCE dimensions: usually no — the whole REDUCE dimension is processed within a single block.</em>
+        </div>
+      </div>
+      <div class="col-q-row">
+        <div class="col-q-name">Block → Shared</div>
+        <div class="col-q-body">
+          Would multiple threads in the same block independently load the <em>same</em> data if we didn't stage it?
+          <em>If yes: load that data once into shared memory. All threads read from the whiteboard instead of each making their own slow global memory trip. If no — if every thread reads unique data — staging is wasteful. The key word is "same."</em>
+        </div>
+      </div>
+      <div class="col-q-row">
+        <div class="col-q-name">Warp → Primitives</div>
+        <div class="col-q-body">
+          What collective operation does the warp need to perform, and which primitive family implements it?
+          <em>This is not only about reductions. Ask: are threads exchanging or permuting data (shuffles)? Making a collective yes/no decision (votes)? Finding lanes that share a value (match)? Multiplying matrix tiles (tensor cores)? Each has its own primitive family — all faster than shared memory and requiring no barrier.</em>
+          <br><br>
+          <strong>Inter-warp collective trigger.</strong> After selecting the primitive family, compute <code>NUM_WARPS = (blockDim.x + 31) / 32</code> (ceiling division — always use ceiling, never floor) for every REDUCE dimension that uses a warp primitive. If <code>NUM_WARPS &gt; 1</code>, the warp primitive alone is insufficient — each warp produces one partial result, and those partials must be combined across warps. This requires a shared memory merge buffer: add <code>warp_partial[NUM_WARPS]</code> (or <code>warp_partial[NUM_WARPS][tile_size]</code> for tiled reductions) to the Block→Shared column, and note that two additional <code>__syncthreads()</code> barriers will appear in the FSM — one after each warp's lane 0 writes its partial, one after thread 0 writes the final result. Include this buffer in the smem budget check below.
+          <br><br>
+          <strong>Compile-time size requirement.</strong> Shared memory array dimensions must be compile-time constants in CUDA. <code>NUM_WARPS</code> must therefore be declared as a <code>constexpr</code> or derived from a template parameter or <code>#define</code> — it cannot be a runtime <code>int</code> computed inside the kernel. The canonical pattern is <code>constexpr int NUM_WARPS = (D_HEAD + 31) / 32;</code> placed before the kernel, where <code>D_HEAD</code> is itself a compile-time constant. A <code>static_assert(D_HEAD % 32 == 0, "...");</code> alongside it documents the assumption that blocks are always full warps.
+          <br><br>
+          <strong>Active mask rule.</strong> Every warp primitive call requires an active mask as its first argument. Never hardcode <code>0xffffffff</code> — this assumes all 32 lanes are active, which fails for blocks where <code>blockDim.x</code> is not a multiple of 32. Instead, compute the mask explicitly: <code>unsigned mask = __ballot_sync(0xffffffff, true);</code> This returns the bitmask of all active threads participating in the ballot; when subsequently passed to <code>__shfl_down_sync</code>, only bits within the caller's warp are examined by hardware, so threads from other warps have no effect. Some developers prefer <code>unsigned mask = __activemask();</code> for clarity — both are correct here. The important invariant is that the mask passed to the shuffle matches the lanes that will participate in the reduction.
+        </div>
+      </div>
+      <div class="col-q-row">
+        <div class="col-q-name">Thread → Registers</div>
+        <div class="col-q-body">
+          What does a single thread compute entirely on its own?
+          <em>State variables identified in Step 1a live here. One thread's running sum, one thread's current maximum, one thread's heap. Private computation that no other thread needs to see during the COMPUTE phase.</em>
+          <br><br>
+          <strong>Starting heuristic for thread tile size.</strong> A thread tile of 1 (one output element per thread) is always correct and a safe place to start. The only reason to increase it is if Step 4b will show that a register-held value is reused across the tile dimension — meaning we read it from shared memory once but use it multiple times before discarding it. If we're unsure, write 1 here and wait for Step 4b to tell us whether a larger tile is justified. The register budget check below is your ceiling: if the tile-1 design already uses 80+ registers, there is little room to grow.
+        </div>
+      </div>
+    </div>
+
+    <div class="callout">
+      <strong>Warp primitive quick-match.</strong> If we're unsure which primitive family applies, match your computation to one of these patterns:
+      <br><br>
+      "I need to sum / max / min values across all 32 lanes for the same output element." → <strong>Data Exchange (Shuffles)</strong>, specifically <code>__shfl_down_sync</code> with offsets 16, 8, 4, 2, 1.
+      <br><br>
+      "I need all lanes / any lane / how many lanes satisfy a condition." → <strong>Voting</strong> (<code>__all_sync</code>, <code>__any_sync</code>, <code>__ballot_sync</code>).
+      <br><br>
+      "Multiple lanes might write to the same output bucket — I want to elect one representative per group to avoid serialized atomics." → <strong>Match</strong> (<code>__match_any_sync</code>).
+      <br><br>
+      "My REDUCE dimension is a matrix multiply over tiles of shape 16×16×16 (or 16×8×16) and I want hardware tensor cores." → <strong>Warp Matrix Ops</strong> (<code>wmma::mma_sync</code>). Note that tensor cores fix the tile shape — this constrains your Block granularity in the Binding Table.
+      <br><br>
+      "My REDUCE dimension is computed entirely within each thread's private registers and no lanes need to share partial results." → <strong>No warp primitive</strong>. GEMM with a register tile accumulator is the canonical example: each thread accumulates its own private C tile and never needs to exchange values with other lanes.
+    </div>
+
+    <div class="prose">
+      <p>After filling in all four columns, do a <strong>shared memory budget check</strong>. Add up the sizes of everything we've marked as staged in shared memory. For each staged tensor or buffer, multiply the number of elements by the bytes per element. Sum all of it, including any <code>warp_partial</code> buffers generated by the inter-warp collective trigger above. If the total exceeds your hardware's shared memory limit per block (check your GPU's spec sheet — it varies), we have a problem that needs to be resolved now by adjusting tile sizes or reconsidering staging decisions. Finding this on paper is much better than finding it when your kernel silently fails to launch.</p>
+      <p>Immediately after, do a <strong>register budget check</strong>. Sum the sizes of all Thread→Registers state variables in float-equivalents. This is a lower bound — the compiler will add temporaries on top. If the sum exceeds 64 floats per thread, occupancy may fall below 4 warps per SM; if it exceeds 128, register spill into local memory (global memory with extra addressing) is likely. Both effects can cost more than the register tiling gains. Resolve by reducing thread-tile shape before proceeding to Step 4a.</p>
+
+    <div class="callout">
+      <strong>Load coverage rule — verify before Step 3.</strong> For each shared memory buffer of size <em>S</em> elements, with <em>T</em> active threads in the block: each thread must load <code>ceil(S / T)</code> elements in the LOAD phase. One element per thread is only correct when S = T. The general pattern is a stride loop:
+      <br><br>
+      <code>for (int p = threadIdx_linear; p &lt; S; p += blockDim_linear) {<br>&nbsp;&nbsp;&nbsp;&nbsp;smem[local_index(p)] = global[global_index(p)];<br>}</code>
+      <br><br>
+      where <code>threadIdx_linear = ty·blockDim.x + tx</code> and the index formulas come from the Composite leaf pattern (Flatten→Stride→Unflatten). If your LOAD phase only loads one element per thread and S &gt; T, it is a correctness bug: part of the smem buffer will contain uninitialized data. Verify the coverage equation for every staged buffer now, before placing barriers in Step 3.
+      <br><br>
+      <strong>Zero-length reduction guard.</strong> After computing <code>num_tiles</code> for any REDUCE dimension, add a guard: if <code>num_tiles == 0</code>, write the identity value and return immediately. Without this guard, a kernel operating on an empty sparse row or zero-length sequence will skip the tile loop but still execute NORMALIZE and STORE with uninitialized state variables. The identity for sum is 0, for max is −∞, for online softmax is m=−∞, l=0, o=0. Place this guard immediately after the tile count is computed, before the tile loop opens.
+    </div>
+
+    <div class="feeds-into">
+      <strong>Feeds into final step →</strong> Symbol legend (all dimension roles: grid index vars, block tile sizes, thread index vars, thread tile sizes, reg loop vars, memory sizes — one row per dimension) · Declaration table (launch config from Grid→Global; smem buffers from Block→Shared; register vars from Thread→Registers)
+    </div>
+    </div>
+
+    <div class="callout">
+      <strong>The Warp level is the most commonly missed.</strong> Beginners often jump from Block to Thread, skipping Warp entirely. This leads to kernels that use shared memory and barriers for communication that could have happened through warp primitives for free — no memory consumed, no barrier latency. Always ask the Warp question explicitly, and ask it about the <em>specific nature</em> of the cooperation needed, not just "is there a reduction?"
+    </div>
+
+    <div class="warp-intro">
+      <strong>The warp is not just a reduction engine.</strong> It is a collective execution unit with four distinct families of primitives. The right answer for the Warp column depends on which kind of cooperation your kernel actually needs. The first family is expanded — click any header to expand or collapse.
+    </div>
+
+    <div class="warp-families" id="warp-families">
+
+      <div class="warp-family">
+        <div class="wf-header" onclick="toggleFamily('f1')">
+          <div class="wf-name">
+            <div class="wf-title">Data Exchange (Shuffles)</div>
+            <div class="wf-prims">
+              <span class="wf-prim">__shfl_sync</span>
+              <span class="wf-prim">__shfl_up_sync</span>
+              <span class="wf-prim">__shfl_down_sync</span>
+              <span class="wf-prim">__shfl_xor_sync</span>
+            </div>
+          </div>
+          <div class="wf-when">Any thread needs a value from another lane's register — permutations, reductions, prefix operations, bitonic sort.</div>
+        </div>
+        <div class="wf-body open" id="f1">
+          <p>The shuffle family is the most general warp primitive. Each instruction lets a lane read the register value of any other lane directly, with no memory and no barrier. The four variants cover different communication patterns.</p>
+          <p><strong>__shfl_sync(mask, val, src_lane)</strong> is a broadcast or gather: every lane specifies which lane it wants to receive from. Different lanes can pull from different sources simultaneously, making arbitrary within-warp permutations possible in a single instruction.</p>
+          <p><strong>__shfl_down_sync(mask, val, delta)</strong> shifts data downward: lane N receives lane N+delta's value. This is the primitive most commonly seen in reductions — you shift by 16, then 8, then 4, then 2, then 1, and lane 0 accumulates the total.</p>
+          <p><strong>__shfl_up_sync(mask, val, delta)</strong> shifts data upward: lane N receives lane N−delta's value. This is the natural primitive for prefix (scan) operations — each lane combines with its left neighbor.</p>
+          <p><strong>__shfl_xor_sync(mask, val, lane_mask)</strong> exchanges between lanes whose IDs differ by a XOR pattern. Butterfly communication networks — which underlie bitonic sort, Walsh-Hadamard transforms, and many parallel algorithms — are wired exactly this way. Every compare-and-swap round of a bitonic sort within a warp is one __shfl_xor_sync call.</p>
+          <p>Use the shuffle family when threads need data from other lanes. Use __shfl_down for reduction, __shfl_up for prefix scans, __shfl_xor for sort networks and butterfly patterns, and __shfl_sync for arbitrary permutations.</p>
+        </div>
+      </div>
+
+      <div class="warp-family">
+        <div class="wf-header" onclick="toggleFamily('f2')">
+          <div class="wf-name">
+            <div class="wf-title">Voting</div>
+            <div class="wf-prims">
+              <span class="wf-prim">__ballot_sync</span>
+              <span class="wf-prim">__all_sync</span>
+              <span class="wf-prim">__any_sync</span>
+            </div>
+          </div>
+          <div class="wf-when">The warp needs to make a collective decision about its own state — early termination, counting active lanes, finding which lanes satisfy a condition.</div>
+        </div>
+        <div class="wf-body" id="f2">
+          <p>The voting family is about collective decision-making rather than data movement. These primitives ask a yes/no question across all 32 lanes simultaneously and return information about how the lanes answered.</p>
+          <p><strong>__ballot_sync(mask, predicate)</strong> returns a 32-bit integer where bit N is 1 if lane N's predicate was true. This gives you the complete picture of which lanes satisfy a condition in one instruction. From the ballot result we can count active lanes with __popc(), find the first active lane with __ffs(), or use the bitmask to coordinate work distribution.</p>
+          <p><strong>__all_sync(mask, predicate)</strong> returns 1 only if every active lane's predicate is true — useful for detecting convergence. If all threads have finished iterating, exit the loop now rather than having each thread check independently and potentially causing warp divergence.</p>
+          <p><strong>__any_sync(mask, predicate)</strong> returns 1 if at least one active lane's predicate is true — useful for detecting whether any thread still has work to do before deciding to continue a loop.</p>
+          <p>Use the voting family when the warp needs to answer a structural question about itself: are all threads done? How many have valid data? Which ones hit a boundary condition? These questions are expensive when answered per-thread with branches; they are free when answered collectively with a vote.</p>
+        </div>
+      </div>
+
+      <div class="warp-family">
+        <div class="wf-header" onclick="toggleFamily('f3')">
+          <div class="wf-name">
+            <div class="wf-title">Match</div>
+            <div class="wf-prims">
+              <span class="wf-prim">__match_any_sync</span>
+              <span class="wf-prim">__match_all_sync</span>
+            </div>
+          </div>
+          <div class="wf-when">Multiple lanes need to update the same output position — histograms, sparse accumulations, gather/scatter where threads collide on the same destination.</div>
+        </div>
+        <div class="wf-body" id="f3">
+          <p>The match family is the least commonly known but addresses a specific pain point that has no clean solution with the other primitives: what do we do when multiple threads in the same warp need to update the same output element?</p>
+          <p>The naive answer is atomic operations — but atomics serialize. If eight threads all need to add to the same output bin, those eight additions happen one after another rather than in parallel. The match family lets we find the groups of threads that share a destination and elect one representative from each group to perform the update once.</p>
+          <p><strong>__match_any_sync(mask, val)</strong> takes a value from every lane and returns, for each lane, a bitmask of all the lanes that hold the same value. Each lane learns which other lanes are in its group in one instruction. The group can then use __ballot_sync or __ffs() to elect a representative, who performs the update while the others skip it. The result is the same as serialized atomics but with much less contention.</p>
+          <p><strong>__match_all_sync(mask, val, pred)</strong> checks whether all active lanes hold the same value and returns 1 if so. Less commonly used, but useful for verifying uniform conditions before taking a fast path that assumes uniformity.</p>
+          <p>Use the match family for histogram operations, sparse scatter/gather, and any situation where threads in the same warp may collide on the same output address.</p>
+        </div>
+      </div>
+
+      <div class="warp-family">
+        <div class="wf-header" onclick="toggleFamily('f4')">
+          <div class="wf-name">
+            <div class="wf-title">Warp Matrix Ops</div>
+            <div class="wf-prims">
+              <span class="wf-prim">wmma::load_matrix_sync</span>
+              <span class="wf-prim">wmma::mma_sync</span>
+              <span class="wf-prim">wmma::store_matrix_sync</span>
+            </div>
+          </div>
+          <div class="wf-when">The REDUCE dimension is a matrix multiply-accumulate and the tile sizes match Tensor Core dimensions (16×16×16 or similar).</div>
+        </div>
+        <div class="wf-body" id="f4">
+          <p>The warp matrix family is the most powerful and most specialized. Tensor Cores are dedicated hardware units that perform small matrix multiplications in mixed precision as a single warp-level operation. The throughput gap versus scalar instructions is enormous — hundreds of FLOPs per clock versus a handful.</p>
+          <p>The mental model here is different from the other families. Instead of each lane holding an independent value that it contributes to a collective, the entire warp <em>collectively owns</em> a matrix fragment distributed across the 32 lanes in a hardware-defined layout. We don't control which lane holds which matrix element — the hardware decides that and optimizes for the tensor core's internal memory structure. You interact through abstract fragment types: a matrix_a fragment, a matrix_b fragment, and an accumulator fragment.</p>
+          <p><strong>wmma::load_matrix_sync</strong> loads a matrix tile from shared or global memory into the warp-distributed fragment representation. <strong>wmma::mma_sync</strong> performs the matrix multiply-accumulate in one warp-level instruction. <strong>wmma::store_matrix_sync</strong> writes the accumulator fragment back to memory.</p>
+          <p>This family changes the Binding Table analysis significantly for matrix-shaped operations. When Tensor Cores are applicable, the Warp column entry is not "use shuffles to reduce" — it's "use wmma fragments to collectively own a tile." The warp is no longer processing 32 independent scalars that communicate; it is collectively processing a matrix as a single unit.</p>
+          <p>Use this family when your REDUCE dimension is a dot product or matrix multiply, the tile dimensions match the hardware's supported sizes, and the precision requirements are compatible with Tensor Core's mixed-precision modes.</p>
+        </div>
+      </div>
+
+    </div>
+
+    <script>
+    function toggleFamily(id) {
+      const body = document.getElementById(id);
+      body.classList.toggle('open');
+    }
+    </script>
+
+  </div>
+
+  <!-- ══ STEP 4a ══ -->
+  <div class="section">
+    <div class="margin-note">
+      <span class="margin-note-label">sequence</span>
+      4a runs before the FSM so staging errors are caught before barrier placement. Fixing a staging decision after Step 3 requires redoing all barrier positions — catching it here saves that work.
+    </div>
+    <div class="section-head">
+      <div class="badge b-4">Step<br>4a</div>
+      <div class="section-head-text">
+        <h2>Lifetime Table — Block Level</h2>
+        <div class="section-q">"Does the reuse count for each Block→Shared buffer actually justify staging it? Validate before building the FSM."</div>
+      </div>
+    </div>
+
+    <div class="prose">
+      <p>Step 4a is a validation step that runs <em>before</em> the FSM is constructed. The Binding Table just made staging decisions — it said certain data should live in shared memory because multiple threads benefit from sharing it. Step 4a gives you a mechanical way to verify each of those decisions before you build barrier placements around them. A wrong staging decision discovered here costs one revision to Step 2. The same mistake discovered after Step 3 costs a revision to Step 2 <em>and</em> a complete redo of all barrier positions in the FSM.</p>
+
+      <p>The underlying principle: staging data into faster memory is only worthwhile if that data is reused enough times to justify the staging cost. If a value is written to shared memory and read exactly once, you paid the staging cost for zero benefit. If it is read a hundred times, you replaced a hundred slow global memory accesses with one global read and a hundred fast shared memory reads. The reuse count determines which case we are in.</p>
+    </div>
+
+    <div class="callout">
+      <strong>How to compute the reuse count for any staged value:</strong> Identify which loop iterators are active — still running — while this value is held in shared memory. Then identify which of those active iterators are <em>absent</em> from the value's own index expression. The absent iterators are the ones the value is reused across. Their combined sizes give the reuse count. A reuse count of 1 means staging provides no benefit; a reuse count of the block tile size or larger strongly justifies staging.
+    </div>
+
+    <div class="prose">
+      <p>Work through every buffer in the Block→Shared column. For each one, compute the reuse count using the rule above. Then apply the check in both directions:</p>
+
+      <p>If we staged something in shared memory but its reuse count is 1 or very small, remove it from Block→Shared and revise Step 2 before continuing. The staging is consuming shared memory capacity and memory bandwidth for no gain — and it is reducing the number of blocks that can run concurrently on the SM, which costs occupancy.</p>
+
+      <p>If we left something in global memory but its reuse count is large, add it to Block→Shared and revise Step 2. We have missed a staging opportunity that would substantially improve performance.</p>
+
+      <div class="callout">
+        <strong>What counts as "large enough" to justify staging?</strong> A reuse count of 1 never justifies staging — you pay the smem write cost for exactly zero reads saved. A reuse count equal to the block tile size or larger (e.g. reuse = BN = 64 for a GEMM A tile) strongly justifies staging. For reuse counts in between, apply this rule: if the smem budget is not yet tight and global memory bandwidth is likely your bottleneck (common for memory-bound kernels), stage it. If the smem budget is already near the limit and the kernel is compute-bound, leave it in global memory. When genuinely unsure, stage it — the default behavior of hardware L2 cache provides a reuse benefit anyway, and explicit smem staging makes that benefit reliable and measurable.
+      </div>
+
+      <p>If any revision is made to Step 2 as a result of this check, redo the shared memory and register budget checks before proceeding. Only when the Block→Shared column is validated should we move on to Step 3 to place barriers around it.</p>
+    </div>
+
+    <div class="fill-table-wrap">
+      <span class="fill-table-wrap-label">What this step produces — one row per Block→Shared buffer</span>
+      <table class="fill-table">
+        <thead>
+          <tr>
+            <th>Buffer (from Step 2)</th>
+            <th>Active iterators while held</th>
+            <th>Absent iterators → reuse count</th>
+            <th>Decision</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="ft-field">GEMM · A_smem[BK][BM]</td>
+            <td>K tile loop, inner k loop, thread n-tile loop (TN steps)</td>
+            <td class="ft-eg">n-tile loop absent → reuse = TN = 8</td>
+            <td>Keep ✓</td>
+          </tr>
+          <tr>
+            <td class="ft-field">GEMM · B_smem[BK][BN]</td>
+            <td>K tile loop, inner k loop, thread m-tile loop (TM steps)</td>
+            <td class="ft-eg">m-tile loop absent → reuse = TM = 8</td>
+            <td>Keep ✓</td>
+          </tr>
+          <tr>
+            <td class="ft-field">Sparse attn · K_smem[T_J][D]</td>
+            <td>Sparse j loop (nnz blocks), inner k loop, v-thread loop (D threads)</td>
+            <td class="ft-eg">v-thread loop absent → reuse = D = 64. All D threads share same K rows for dot product.</td>
+            <td>Keep ✓</td>
+          </tr>
+          <tr>
+            <td class="ft-field">Sparse attn · score_smem[T_J]</td>
+            <td>Sparse j loop, inner j-in-tile loop</td>
+            <td class="ft-eg">v dim absent → reuse = D = 64. Written once by thread 0, broadcast to all D threads.</td>
+            <td>Keep ✓ (strongest)</td>
+          </tr>
+          <tr>
+            <td class="ft-field">Sparse attn · kv_indices</td>
+            <td>Sparse j loop pointer walk</td>
+            <td class="ft-eg">Reuse = 1 — each index consumed once per sparse iteration. Lookup leaf: staging adds a round-trip without benefit.</td>
+            <td>Do not stage — read directly from global</td>
+          </tr>
+          <tr>
+            <td class="ft-field ft-yours">your buffer</td>
+            <td class="ft-yours">which loops are running while this is held?</td>
+            <td class="ft-yours">which of those are absent from its index?</td>
+            <td class="ft-yours">keep / remove / move to global</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="feeds-into">
+      <strong>Feeds into final step →</strong> Declaration table (confirmed smem buffer sizes — use validated values not Step 2 estimates)
+    </div>
+  </div>
+  <div class="section">
+    <div class="margin-note">
+      <span class="margin-note-label">hardware</span>
+      __syncthreads() stalls every thread in the block until the slowest arrives — hundreds of wasted cycles per barrier. Warp shuffles carry no barrier cost and no memory traffic.
+    </div>
+    <div class="section-head">
+      <div class="badge b-3">Step<br>3</div>
+      <div class="section-head-text">
+        <h2>The FSM — Kernel Phases</h2>
+        <div class="section-q">"What is the temporal sequence of the kernel — what phases execute in what order, and where do barriers go?"</div>
+      </div>
+    </div>
+
+    <div class="prose">
+      <p>The Binding Table told us where data lives. The FSM (Finite State Machine) tells us the temporal sequence in which data moves between those locations. A kernel is not one long computation — it's a series of distinct phases, each one crossing a specific memory boundary or performing a specific operation. Reading the Binding Table from left to right and top to bottom, we can identify every boundary crossing, and each crossing becomes a phase.</p>
+
+      <p>The phases below are the standard ones. Your kernel will use some subset of them — only the ones the Binding Table actually requires. If nothing is staged in shared memory, there is no LOAD phase. If all merging is intra-warp, there is no BLOCK MERGE. The FSM is discovered from the Binding Table, not invented from scratch.</p>
+
+      <p><strong>Novel phases.</strong> If your Algorithm Classification named a phase that does not appear in the standard list — a NORMALIZE phase, a SORT_PASS, a PREFIX_SCAN_UP, a HISTOGRAM_MERGE — insert it at the position the memory boundary crossings dictate. Name it descriptively. The standard phases are the most common cases, not an exhaustive list. Every novel phase still must answer the same three questions: what memory boundary does it cross, does that crossing require a barrier, and what dimension does threadIdx index during it?</p>
+    </div>
+
+    <div class="phase-list">
+      <div class="phase-row">
+        <div class="phase-name">—</div>
+        <div class="phase-barrier">barrier</div>
+        <div class="phase-lane">dim binding →</div>
+        <div class="phase-desc" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted); display:flex; align-items:center;">Column headers. For every phase that uses a warp primitive, write "lane_id → [dim]". For every other phase that touches memory, write "threadIdx → [dim]". This column must be filled for all phases, not just warp phases — the thread index can serve different dimensional roles in different phases, and recording the binding for each phase is the only way to catch role-switching bugs before they reach code.</div>
+      </div>
+      <div class="phase-row">
+        <div class="phase-name">Bounds Check</div>
+        <div class="phase-barrier">—</div>
+        <div class="phase-lane">—</div>
+        <div class="phase-desc">Triggered by any conditional leaf in Step 1b. Check whether the thread's assigned position falls within valid data bounds. If not, write any required default value (often zero) and return immediately. This is cheap and prevents all subsequent work from being wasted on out-of-range threads.</div>
+      </div>
+      <div class="phase-row">
+        <div class="phase-name">Load</div>
+        <div class="phase-barrier yes">barrier</div>
+        <div class="phase-lane bound">tile elements</div>
+        <div class="phase-desc">Triggered when the Block→Shared column has any "yes" entries. Threads cooperatively load data from global memory into the shared memory staging area. Each thread loads a portion; together they fill the whole buffer. Lane_id strides across the tile's elements to maximize memory coalescing. A barrier is required after this phase because subsequent threads will read what their neighbors just wrote.</div>
+      </div>
+      <div class="phase-row">
+        <div class="phase-name">Compute</div>
+        <div class="phase-barrier">—</div>
+        <div class="phase-lane bound">← declare</div>
+        <div class="phase-desc">The main work. Each thread processes its portion of the REDUCE dimension and updates its register-level state variable. <strong>This is where we must write your lane binding declaration.</strong> Which problem dimension does lane_id index during compute — the output elements, or a slice of the reduction dimension? The answer changes what a subsequent warp reduction means. Everything else is handled by a loop inside each lane. Write it down before writing any code.</div>
+      </div>
+      <div class="phase-row">
+        <div class="phase-name">Warp Reduce / Warp Op</div>
+        <div class="phase-barrier">—</div>
+        <div class="phase-lane bound">REDUCE dim</div>
+        <div class="phase-desc">Triggered when the Warp→Primitives column has any entries. The 32 lanes perform their collective operation — a shuffle-based reduction, a prefix scan, a bitonic sort pass, a vote, a match. For a shuffle reduction to be correct, lane_id must index different elements of the same REDUCE dimension — each lane holds a partial result for the same output element, not a complete result for a different output element. No barrier needed. Each warp produces one result, typically held by lane 0.</div>
+      </div>
+      <div class="phase-row">
+        <div class="phase-name">Block Merge</div>
+        <div class="phase-barrier yes">barrier ×n</div>
+        <div class="phase-lane bound">warp index</div>
+        <div class="phase-desc">Triggered when threads from different warps need to combine their results. Lane 0 of each warp writes its result to the shared memory merge buffer. A barrier fires. Then a binary tree reduction across warps takes place — each round, half the warps read their partner's result from shared memory and merge it. One barrier is needed per round of the tree.</div>
+      </div>
+      <div class="phase-row">
+        <div class="phase-name">Store</div>
+        <div class="phase-barrier">—</div>
+        <div class="phase-lane">—</div>
+        <div class="phase-desc">The final phase, triggered by the output contract from the Algorithm Classification step. One thread (or a small coordinated group) writes the final result from registers to its position in global memory. If the output contract requires sorting, a sort phase precedes this one. No barrier needed after Store — threads write to unique positions they own permanently.</div>
+      </div>
+    </div>
+
+    <div class="concept c-rule">
+      <span class="concept-label">The barrier rule — one sentence</span>
+      <p>Place a <code>__syncthreads()</code> barrier at every transition where thread A has written data into shared memory that thread B in the same block needs to read. If only one thread reads what it wrote, no barrier. If threads in different warps share the data, a barrier is required. Warp-level shuffles are exempt entirely — the lockstep execution of the warp is its own synchronization.</p>
+    </div>
+
+    <div class="concept c-rule">
+      <span class="concept-label">The lane binding rule — one declaration per phase</span>
+      <p>For every phase that uses a warp primitive, write one sentence in your FSM: <em>lane_id indexes dimension ___.</em> This declaration specifies which problem dimension varies across the 32 lanes of the warp during this phase. Every other dimension is handled by a loop inside each lane. Writing it down is the entire rule — the value of doing so comes from two cross-checks it enables.</p>
+      <p><strong>Cross-check one: consistency with the Compute phase.</strong> Compare the lane binding in your Compute phase with the lane binding in your Warp Reduce phase. If they differ, the shuffle is mixing partial results from different output elements rather than combining partial results for the same output element. This is the canonical form of the shuffle corruption bug — lanes compute complete dot products for different tokens, then the shuffle sums those independent dot products together as if they were partial sums for one dot product. The mismatch on paper is the signal. If they must differ (because the kernel genuinely changes what lanes represent between phases), we need a warp-level shuffle for data exchange before the reduction, not a reduction shuffle directly.</p>
+      <p><strong>Cross-check two: consistency with the reduction character.</strong> Look at the dimension your lane binding declares in the Warp Reduce phase. Find that dimension in Step 1a. Since all REDUCE dimensions in this framework are parallel character, a shuffle reduction is valid — provided the lane binding is correct. If the cross-check fails here, the issue is with the lane binding assignment, not the reduction character.</p>
+    </div>
+
+    <div class="concept c-rule">
+      <span class="concept-label">The thread phase-role rule — one declaration per non-warp phase</span>
+      <p>The dim-binding column must also be filled for phases that do not use a warp primitive. Write: <em>threadIdx indexes dimension ___.</em> This captures the fact that the same thread index can serve different dimensional roles in different phases. In a kernel where threadIdx.x acts as a key-dimension index during a score-computation phase and an output-dimension index during an accumulation phase, the two phases have different thread roles — and unless both are declared, the mismatch is invisible on paper.</p>
+      <p><strong>Cross-check three: consistency across shared memory boundaries.</strong> After declaring the thread role for every phase, find every pair of adjacent phases (A writes smem, B reads smem) and check that the index interpretation of the shared memory buffer is the same in A as in B. If phase A writes <code>smem[threadIdx.x]</code> with threadIdx.x meaning dimension k, and phase B reads <code>smem[threadIdx.x]</code> with threadIdx.x meaning dimension v, the buffer is populated in k-order and consumed in v-order — a silent indexing corruption. The fix is either to reindex the smem read in B, or to recognize that the two phases require a buffer transpose between them. This cross-check catches the bug on paper; without declared thread roles it can only be caught by inspecting a failing numerical output.</p>
+    </div>
+
+    <div class="callout">
+      <strong>Cross-check 3 — a concrete example.</strong> <em style="color:var(--muted);font-size:13px">Most simple kernels (vector add, reduced sum, GEMM) have a single consistent thread role throughout and will pass this check automatically. This example matters most when a kernel's phases assign threadIdx to different problem dimensions — most commonly in attention kernels where the head dimension is used for both dot-product computation and output accumulation.</em>
+      Suppose a kernel has two phases:
+      <br><br>
+      Phase A (LOAD): <code>smem[threadIdx.x] = K_global[j * D + threadIdx.x]</code>. Here threadIdx.x is being used as the head-dimension index <em>k</em>. A 64-thread block fills smem[0..63] with K[j, 0..63].
+      <br><br>
+      Phase B (COMPUTE): the code then reads <code>smem[threadIdx.x]</code> while computing a dot product. threadIdx.x still means k. <strong>Same role. Cross-check passes.</strong>
+      <br><br>
+      Now suppose Phase C (ACCUMULATE) also reads <code>smem[threadIdx.x]</code>, but this time threadIdx.x is the output-dimension index <em>v</em>. The developer intends to read "my V column." But smem was filled in k-order, not v-order. If k and v both happen to have size D = 64, the read is physically correct (smem[5] when threadIdx.x=5 means the same byte whether k=5 or v=5). <strong>Cross-check passes only because D_k = D_v.</strong>
+      <br><br>
+      If D_k ≠ D_v — for example, in Multi-head Latent Attention where D_k = 128 and D_v = 64 — the same code reads smem[0..63] as v-indices, but smem was filled for k-indices 0..127. Thread 63 reads smem[63] intending V[j, 63], but smem[63] holds K[j, 63], which is only half the K vector. Cross-check 3 would have flagged this: the thread role switches from k-domain to v-domain at the smem boundary, and D_k ≠ D_v makes the physical addresses incompatible.
+    </div>
+
+    <div class="prose">
+      <p>For each phase, record two things: which state variables are alive — that is, which values are being held and not yet consumed — and the lane binding for any phase that uses a warp primitive. A state variable is alive from its initialization through every phase that updates or reads it, until the phase that finally writes it out to its destination. Tracking this prevents a class of bugs where a state variable is overwritten before its value is used, or consumed in the wrong phase. The lane binding prevents the class of bugs where correctly structured state variables are combined in the wrong way.</p>
+
+    <div class="feeds-into">
+      <strong>Feeds into final step →</strong> Phase skeleton (read FSM rows top to bottom — each phase row becomes one code block in sequence; barrier column gives sync placement; novel phases from Algorithm Classification appear at their specified positions)
+    </div>
+    </div>
+  </div>
+
+  <!-- ══ OPTIONAL: PIPELINING & DOUBLE BUFFERING ══ -->
+  <div class="opt-banner">
+    <span class="opt-banner-label">⏩ Optional — performance extension</span>
+    <span class="opt-banner-desc">Read after Step 3 is complete and your kernel is correct</span>
+  </div>
+  <div class="section opt-section">
+    <div class="margin-note">
+      <span class="margin-note-label">hardware</span>
+      cp.async bypasses L1 and writes direct to smem. Requires sm_80+ (Ampere and later). On Hopper, TMA transfers a full tile in a single instruction.
+    </div>
+    <div class="section-head">
+      <div class="badge b-opt">Opt<br>3+</div>
+      <div class="section-head-text">
+        <h2>Pipelining &amp; Double Buffering</h2>
+        <div class="section-q">"My kernel is correct — but the memory unit sits idle while threads compute. How do I overlap the two?"</div>
+      </div>
+    </div>
+
+    <div class="prose">
+      <p>The FSM we built in Step 3 follows a safe, sequential rhythm: <em>load a tile into shared memory → barrier → compute on that tile → repeat</em>. During the compute phase, threads are busy doing arithmetic — but look at what else is happening, or rather, what isn't: the memory unit is completely idle. The GPU's ability to fetch data from global memory sits unused while threads crunch numbers. Then when compute ends and the next load begins, the arithmetic units sit idle while memory is busy. The two pipelines take turns rather than running simultaneously.</p>
+
+      <p>Pipelining is the technique that closes this gap. Instead of waiting for tile t's computation to finish before starting tile t+1's load, you <strong>fire off the load of tile t+1 in the background while computing on tile t</strong>. By the time the computation on tile t finishes, the load of tile t+1 is already done — or at least well underway. Memory and arithmetic run simultaneously rather than alternating.</p>
+
+      <p>This sounds simple, but it creates an immediate problem: we can't load tile t+1 into the same shared memory buffer we're currently computing on. Overwriting the buffer mid-computation would corrupt the results. The solution is to allocate <strong>two shared memory buffers</strong> that alternate roles — a "ping" and a "pong." While we compute on ping, we load into pong. While we compute on pong, we load into ping. This pattern is called <strong>double buffering</strong>, and it's the only structural change to shared memory that pipelining requires.</p>
+
+      <p>The second ingredient is <strong>asynchronous copy</strong>, available on sm_80 and later via the <code>cp.async</code> instruction. A normal load blocks all threads in the block until the data arrives — that's what makes <code>__syncthreads()</code> after a load necessary. An async copy fires off the memory request and immediately lets threads continue without waiting. Think of it as handing the memory unit a shopping list and saying "get these while I start cooking." Threads proceed to the compute phase on the current tile, and only pause to wait for the async load when they actually need the freshly loaded tile at the top of the next iteration.</p>
+    </div>
+
+    <div class="callout">
+      <strong>Is pipelining worth the added complexity?</strong> Only when the compute phase is long enough to cover the load latency. If your load takes 200 cycles and your compute takes 20, the async load finishes long before compute ends — you'll see no benefit. If compute takes 500 cycles and load takes 200, pipelining can almost completely hide the load cost. The Lifetime Table (Step 4) gives you a signal before we write a single line: <strong>a high reuse count means compute time dominates, which means pipelining will help</strong>. A reuse count of 1 or 2 usually means compute is too short to care.
+    </div>
+
+    <div class="prose">
+      <p><strong>Step 2 extension — the Async column.</strong> If we decide to pipeline, we return to our Binding Table and add one new column: <strong>Async</strong>. For every shared memory buffer, record whether its loads will be synchronous (the baseline, write "no") or asynchronous (write "cp.async"). Most kernels will only mark the main data tiles as async — scratch buffers for warp merging, for instance, are usually not candidates. This keeps the decision visible and traceable: anyone reading your table later can immediately see which buffers were deliberately pipelined and which weren't. For a tiled GEMM where both operand tiles are pipelined, the extension looks like this:</p>
+    </div>
+
+    <div class="col-questions" style="margin-bottom: 28px;">
+      <div class="col-q-row" style="grid-template-columns: 150px 160px 1fr;">
+        <div class="col-q-name">Buffer</div>
+        <div class="col-q-name" style="border-right: 1px solid var(--border);">Block→Shared</div>
+        <div class="col-q-name">Async</div>
+      </div>
+      <div class="col-q-row" style="grid-template-columns: 150px 160px 1fr;">
+        <div class="col-q-name">Tile A (M×K)</div>
+        <div class="col-q-body" style="border-right: 1px solid var(--border);">yes (staged)</div>
+        <div class="col-q-body">cp.async — overlap with compute</div>
+      </div>
+      <div class="col-q-row" style="grid-template-columns: 150px 160px 1fr;">
+        <div class="col-q-name">Tile B (K×N)</div>
+        <div class="col-q-body" style="border-right: 1px solid var(--border);">yes (staged)</div>
+        <div class="col-q-body">cp.async — overlap with compute</div>
+      </div>
+    </div>
+
+    <div class="prose">
+      <p><strong>Step 3 extension — the pipelined FSM.</strong> The pipelined FSM has the same phases as the basic FSM, but two things change: there's a new <strong>Init phase</strong> before the main loop that primes the first buffer, and the barrier type inside the loop shifts from <code>__syncthreads()</code> to <code>cp.async.wait_group(0)</code>. The underlying barrier rule is the same — don't read until the write is done — but the mechanism changes because the write (the load) is now happening asynchronously in the background. The wait at the end of each iteration ensures that by the time the next iteration's compute phase begins, the async load that was fired in the current iteration has finished landing in shared memory.</p>
+    </div>
+
+    <div class="phase-list">
+      <div class="phase-row">
+        <div class="phase-name">Init</div>
+        <div class="phase-barrier">—</div>
+        <div class="phase-lane bound">tile elements</div>
+        <div class="phase-desc">Before entering the tile loop, fire <code>cp.async</code> to load tile 0 into buffer 0, then immediately call <code>cp.async.wait_group(0)</code> to wait for it. This primes the pipeline. Buffer 0 is ready and waiting before the first iteration begins.</div>
+      </div>
+      <div class="phase-row">
+        <div class="phase-name">Load next<br>(async)</div>
+        <div class="phase-barrier">—</div>
+        <div class="phase-lane bound">tile elements</div>
+        <div class="phase-desc">At the top of iteration t, fire <code>cp.async</code> to load tile t+1 into buffer <code>(t+1) % 2</code>. Don't wait — just issue the request and continue. The memory unit handles the transfer in the background while threads move on to compute.</div>
+      </div>
+      <div class="phase-row">
+        <div class="phase-name">Compute<br>current</div>
+        <div class="phase-barrier">—</div>
+        <div class="phase-lane bound">← declare</div>
+        <div class="phase-desc">Compute on buffer <code>t % 2</code>, which holds tile t. This data was loaded by the previous iteration's async step (or by Init for t=0) and is guaranteed ready. Arithmetic and memory loads for tile t+1 are running simultaneously. <strong>Declare lane_id binding here</strong> — it must match the Warp Reduce phase that follows.</div>
+      </div>
+      <div class="phase-row">
+        <div class="phase-name">Sync</div>
+        <div class="phase-barrier async">async wait</div>
+        <div class="phase-lane">—</div>
+        <div class="phase-desc">Call <code>cp.async.wait_group(0)</code>. This waits for the async load fired at the top of this iteration to finish before the next iteration's compute phase reads it. If compute took longer than the load — the ideal case — this wait returns immediately.</div>
+      </div>
+      <div class="phase-row">
+        <div class="phase-name">Store</div>
+        <div class="phase-barrier">—</div>
+        <div class="phase-lane">—</div>
+        <div class="phase-desc">After all tiles are processed, write the accumulated result from registers to global memory, exactly as in the basic FSM. This phase is completely unchanged by pipelining.</div>
+      </div>
+    </div>
+
+    <div class="prose">
+      <p>Notice what didn't change: the grid shape, the register state variables, the Lifetime Table reuse counts, the store phase, and the overall computation logic are all identical to the basic FSM. Pipelining is a targeted surgical extension — we add two buffers, shift the barrier type, and add an init phase. Everything else stays exactly where it was.</p>
+
+      <p><strong>A way to verify pipelining actually helped.</strong> Open Nsight Compute after writing the pipelined kernel and find the "memory pipe utilization" and "compute pipe utilization" metrics. In a well-pipelined kernel, both should be high at the same time. If one flatlines while the other peaks, the two phases aren't overlapping — the compute phase is too short, or the tile size is too small for the overlap to be meaningful. The profiler will show you whether the pipelining worked without any guessing.</p>
+    </div>
+
+    <div class="callout">
+      <strong>Beginner note — save this for later.</strong> Pipelining is a performance optimization, not a correctness requirement. Your kernel already gives the right answer with the basic FSM from Step 3. The right time to come back to this section is after we've profiled your correct kernel and seen idle memory cycles in the output. At that point, you'll know exactly which buffer to pipeline, the Async column addition is a one-line change to your Binding Table, and the FSM extension is mechanical. Introducing pipelining before your kernel is correct is a reliable way to create race conditions that are very hard to debug — because a correctly pipelined wrong kernel looks exactly like an incorrectly pipelined correct one.
+    </div>
+  </div>
+
+  <!-- ══ STEP 4b ══ -->
+  <div class="section">
+    <div class="margin-note">
+      <span class="margin-note-label">hardware</span>
+      Register arrays reuse smem reads across a thread's owned tile. A TM×TN thread tile with TM=TN=8 replaces 64 smem reads with 8 smem reads — an 8× reduction in smem traffic at the cost of 64 register slots.
+    </div>
+    <div class="section-head">
+      <div class="badge b-4">Step<br>4b</div>
+      <div class="section-head-text">
+        <h2>Lifetime Table — Thread Level</h2>
+        <div class="section-q">"How many times is each register-held value reused, and does that justify the thread tile chosen in Step 2?"</div>
+      </div>
+    </div>
+
+    <div class="prose">
+      <p>Step 4b validates the Thread→Registers column of the Binding Table using the same reuse-count method applied to blocks in Step 4a, now applied one level down. The block-level staging decisions were already validated and locked in before the FSM was built. Step 4b now validates the thread-level tiling decisions — specifically, whether the thread tile shape chosen in Step 2's "free" column is actually earning its register cost.</p>
+
+      <p>The reuse count at the thread level works identically to the block level: identify which of the thread's owned AREA dimensions are absent from a given register-held value's index. Multiply their per-thread sizes. That product is the register-level reuse count — the number of times one shared memory read is reused across the thread's register tile before the value is discarded.</p>
+    </div>
+
+    <div class="callout">
+      <strong>Thread-level reuse sub-table.</strong> For each register-held value, the active iterators are the thread's own loop counters over its owned tile dimensions plus any remaining REDUCE loops. The absent iterators among these are the reuse dimensions at the thread level. A concrete example: suppose a thread owns <code>TM</code> outputs along M and <code>TN</code> along N. It holds a loaded A element indexed by M and K — N is absent. As the thread iterates over its <code>TN</code> owned N outputs, that A element is reused <code>TN</code> times from registers without touching shared memory again. Register-level reuse count for A is <code>TN</code>. Similarly, a B element indexed by K and N has M absent, giving a register-level reuse count of <code>TM</code>.
+    </div>
+
+    <div class="prose">
+      <p>The practical check: if the Binding Table's Thread→Registers column recorded a thread tile of granularity greater than 1 for any AREA dimension, verify here that at least one value held in registers has a non-trivial reuse count across that tile dimension. If no value does, the larger thread tile is consuming extra registers without benefit — reduce the granularity back toward 1 and recheck the register budget from Step 2. If a value does have a large reuse count but the thread tile was left at 1, we have missed a register tiling opportunity that would reduce shared memory traffic substantially — increase the thread tile shape and recheck the register budget.</p>
+
+      <p>Unlike Step 4a, corrections here do not require redoing the FSM. Barrier placement is driven by shared memory boundary crossings, which are set by the block-level staging decisions already validated. Thread tile changes affect only the inner compute loop and the register declarations in the Thread→Registers column. After making corrections, update Step 2 and proceed to Step 5.</p>
+    </div>
+
+    <div class="fill-table-wrap">
+      <span class="fill-table-wrap-label">What this step produces — one row per register-held value</span>
+      <table class="fill-table">
+        <thead>
+          <tr>
+            <th>Register value</th>
+            <th>Thread's owned AREA dims</th>
+            <th>Absent AREA dims → reuse count</th>
+            <th>Thread tile justified?</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="ft-field">GEMM · a_reg[TM]</td>
+            <td>m (TM elements), n (TN elements)</td>
+            <td class="ft-eg">n absent → reuse = TN = 8. One smem read reused 8× across n-tile.</td>
+            <td>TM = 8 justified ✓</td>
+          </tr>
+          <tr>
+            <td class="ft-field">GEMM · b_reg[TN]</td>
+            <td>m (TM elements), n (TN elements)</td>
+            <td class="ft-eg">m absent → reuse = TM = 8. One smem read reused 8× across m-tile.</td>
+            <td>TN = 8 justified ✓</td>
+          </tr>
+          <tr>
+            <td class="ft-field">GEMM · C_acc[TM][TN]</td>
+            <td>m (TM elements), n (TN elements)</td>
+            <td class="ft-eg">k absent → reuse = K/BK tiles. Accumulator persists across all K tiles.</td>
+            <td>Register accumulator justified ✓</td>
+          </tr>
+          <tr>
+            <td class="ft-field">Sparse attn · q_reg</td>
+            <td>v (1 element — thread tile = 1)</td>
+            <td class="ft-eg">j absent from Q index → reuse = nnz_blocks per query. One global load reused across entire sparse j loop.</td>
+            <td>Register justified ✓; tile = 1 correct (v thread tile = 1)</td>
+          </tr>
+          <tr>
+            <td class="ft-field">Sparse attn · o_acc</td>
+            <td>v (1 element — thread tile = 1)</td>
+            <td class="ft-eg">j absent → reuse = nnz_blocks. Accumulator persists across all sparse KV blocks.</td>
+            <td>Register justified ✓; Step 5 downward pass: tile &gt; 1 possible but changes score layout — noted, not acted on</td>
+          </tr>
+          <tr>
+            <td class="ft-field">Sparse attn · m_acc, l_acc</td>
+            <td>v (1 element)</td>
+            <td class="ft-eg">j absent → reuse = nnz_blocks. Online softmax state persists across all sparse blocks.</td>
+            <td>Register justified ✓</td>
+          </tr>
+          <tr>
+            <td class="ft-field ft-yours">your register value</td>
+            <td class="ft-yours">which AREA dims does this thread own?</td>
+            <td class="ft-yours">which are absent from this value's index?</td>
+            <td class="ft-yours">increase tile / reduce tile / leave at 1</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="feeds-into">
+      <strong>Feeds into final step →</strong> Symbol legend (thread tile sizes confirmed — update any "TBD" entries from Step 2) · Declaration table (register accumulator shape, e.g. <code>float C_acc[TM][TN]</code>)
+    </div>
+  </div>
+  <div class="section">
+    <div class="margin-note">
+      <span class="margin-note-label">hardware</span>
+      Stride-1 arithmetic leaves → one 128-byte cache line per 32 threads: full coalescing. Strided or scattered access patterns can be 8–32× slower and prevent hardware prefetching.
+    </div>
+    <div class="section-head">
+      <div class="badge b-5">Step<br>5</div>
+      <div class="section-head-text">
+        <h2>The Binary Tree Table (Index Trees)</h2>
+        <div class="section-q">"How is each memory address computed, and what does the structure of that computation reveal?"</div>
+      </div>
+    </div>
+
+    <div class="prose">
+      <p>The final step is the most mechanical one, and it serves two distinct purposes: <strong>verification</strong> and <strong>opportunity detection</strong>. Every time your kernel reads from or writes to memory, it computes an address. That address is always an expression built from execution indices and loop variables. Step 5 asks you to write each of those expressions as a tree, where the leaves are labeled with their type from Step 1b.</p>
+
+      <p>The tree doesn't need to be elaborate. The root is the full address. The branches split it into components. The leaves are the individual terms — each one labeled as arithmetic, lookup, type-conversion, or conditional. A simple access like <code>data[batch * N + i]</code> produces a tree with two arithmetic leaves: one for <code>batch × N</code> and one for <code>i × 1</code>. A paged access adds a lookup leaf at the top before the arithmetic leaves within the page.</p>
+    </div>
+
+    <div class="prose">
+      <p><strong>Verification.</strong> Once we have the tree, computing the maximum possible address is straightforward: substitute the maximum value for each leaf (for a dimension of size N, the maximum index is N−1) and evaluate the expression. Check that this maximum address falls within the allocated size of the corresponding buffer. Do this for every access in your kernel. It's tedious but mechanical, and it catches buffer overflow bugs before they happen — bugs that are notoriously difficult to track down once the code is running on a GPU.</p>
+
+      <p><strong>Opportunity detection — upward pass.</strong> Look at your REDUCE dimensions — the ones that are contracted — and find them in the index trees. For each REDUCE dimension that appears as an arithmetic leaf, ask: <em>at what level of the execution hierarchy is this dimension currently being processed?</em> Then ask the follow-up question: <em>what would happen if it were processed at the next level up?</em></p>
+
+      <p>If a REDUCE dimension currently owned by individual threads appears as an arithmetic leaf with a simple stride, moving it to the warp level would mean all 32 threads in a warp access 32 consecutive memory positions simultaneously. That's perfectly coalesced global memory access — one of the most significant optimizations available on a GPU. If a REDUCE dimension currently processed sequentially within a thread has no data dependencies between its iterations, it could be parallelized across warp lanes and reduced with shuffle instructions.</p>
+
+      <p><strong>Opportunity detection — downward pass.</strong> Look at your AREA dimensions and find them in the index trees. For each AREA dimension that appears as an arithmetic leaf at Block or Warp granularity, ask: <em>what would happen if a slice of it were moved down into the thread's register tile?</em> If threadIdx currently addresses a single element of this dimension, and the kernel iterates over a REDUCE dimension while holding that output element in a register, then the output element is being reused exactly once per REDUCE step — which is the minimum. Increasing the thread tile to T elements along this AREA dimension would mean one shared memory read is reused T times across the tile, replacing T smem reads with T register reads for each loaded value. If the Step 4b reuse table already recorded a large thread-level reuse count for this dimension, a tile of T=1 is wasteful — the downward analysis makes the missed opportunity explicit. Record the recommended thread tile size and note that Step 2's thread-tile entry should be revisited before coding.</p>
+
+      <p><strong>Deciding whether to act on an opportunity.</strong> The downward pass identifies opportunities; it does not mandate acting on them. Use this rule: if the Step 4b reuse count for the AREA dimension exceeds 4 <em>and</em> the register budget from Step 2 has more than 32 float-equivalents of headroom, increasing the thread tile is likely worthwhile — revise Step 2's thread-tile entry and recheck the register budget. If either condition is not met, note the opportunity in your derivation record and leave the tile at its current size. For the upward pass, the same logic applies: if moving a REDUCE dimension up one level requires introducing an inter-block reduction kernel or significant synchronization overhead, record the opportunity but assess whether the added complexity is warranted for your problem size.</p>
+
+      <p>These observations don't come from profiling. They come directly from reading the index tree structure. The framework makes these opportunities visible by construction, which is the deepest reason the Binary Tree Table exists.</p>
+    </div>
+
+    <div class="fill-table-wrap">
+      <span class="fill-table-wrap-label">Bounds verification — one row per global memory access</span>
+      <table class="fill-table">
+        <thead>
+          <tr>
+            <th>Tensor access</th>
+            <th>Max address (substitute max index per dim)</th>
+            <th>Buffer size</th>
+            <th>Safe?</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="ft-field">GEMM · A[m, k]</td>
+            <td>(M−1)×K + (K−1) = M×K − 1</td>
+            <td class="ft-eg">M × K floats</td>
+            <td>✓</td>
+          </tr>
+          <tr>
+            <td class="ft-field">GEMM · B[k, n]</td>
+            <td>(K−1)×N + (N−1) = K×N − 1</td>
+            <td class="ft-eg">K × N floats</td>
+            <td>✓</td>
+          </tr>
+          <tr>
+            <td class="ft-field">GEMM · C[m, n]</td>
+            <td>(M−1)×N + (N−1) = M×N − 1</td>
+            <td class="ft-eg">M × N floats</td>
+            <td>✓</td>
+          </tr>
+          <tr>
+            <td class="ft-field">Sparse attn · kv_indices[ptr]</td>
+            <td>ptr ∈ [row_ptr[q], row_ptr[q+1]) → max = nnz_blocks − 1</td>
+            <td class="ft-eg">nnz_blocks integers</td>
+            <td>✓ — must verify ptr never exceeds nnz_blocks</td>
+          </tr>
+          <tr>
+            <td class="ft-field">Sparse attn · K[kv_idx·T_J+j, k]</td>
+            <td>kv_idx via lookup leaf; max physical row = S_kv−1. Max addr = (S_kv−1)×D + (D−1) = S_kv×D − 1</td>
+            <td class="ft-eg">S_kv × D floats</td>
+            <td>✓ — lookup leaf: verify kv_indices values are in [0, num_kv_blocks)</td>
+          </tr>
+          <tr>
+            <td class="ft-field">Sparse attn · Q[q, k] / O[q, v]</td>
+            <td>(S_q−1)×D + (D−1) = S_q×D − 1</td>
+            <td class="ft-eg">S_q × D floats</td>
+            <td>✓</td>
+          </tr>
+          <tr>
+            <td class="ft-field ft-yours">your access</td>
+            <td class="ft-yours">substitute max value for each dimension</td>
+            <td class="ft-yours">allocated buffer size</td>
+            <td class="ft-yours">✓ or ✗ (fix if ✗)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="fill-table-wrap">
+      <span class="fill-table-wrap-label">Opportunity detection — record every candidate, then decide</span>
+      <table class="fill-table">
+        <thead>
+          <tr>
+            <th>Dimension</th>
+            <th>Fate</th>
+            <th>Current level</th>
+            <th>Direction</th>
+            <th>Opportunity</th>
+            <th>Act?</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="ft-field">GEMM · K</td>
+            <td>REDUCE</td>
+            <td>Thread (inner loop)</td>
+            <td>Up → Warp</td>
+            <td class="ft-eg">Warp shuffle reduction: 32 threads each take one k, reduce to lane 0. Eliminates private TM×TN tile.</td>
+            <td>No — private accumulator gives reuse = TN, TM; shuffle design loses that</td>
+          </tr>
+          <tr>
+            <td class="ft-field">GEMM · M, N</td>
+            <td>AREA</td>
+            <td>Block (smem)</td>
+            <td>Down → Thread</td>
+            <td class="ft-eg">Register tile TM×TN gives a_reg reuse = TN, b_reg reuse = TM.</td>
+            <td>Yes — implemented at TM=TN=8 ✓</td>
+          </tr>
+          <tr>
+            <td class="ft-field">Sparse attn · k (head dim)</td>
+            <td>REDUCE</td>
+            <td>Thread (warp shuffle)</td>
+            <td>Up → already at Warp</td>
+            <td class="ft-eg">__shfl_down_sync already implements warp-level k reduction. NUM_WARPS=2 → warp_partial inter-warp stage also derived.</td>
+            <td>Already implemented ✓</td>
+          </tr>
+          <tr>
+            <td class="ft-field">Sparse attn · j (sparse KV blocks)</td>
+            <td>REDUCE</td>
+            <td>Block (sparse tile loop)</td>
+            <td>Up → Grid</td>
+            <td class="ft-eg">Multiple blocks process disjoint subsets of kv_indices, combine online-softmax states via global memory (split-KV). Requires atomic online-softmax merge or a second reduction kernel.</td>
+            <td>Not implemented — valid optimization for very long sparse sequences; adds significant complexity</td>
+          </tr>
+          <tr>
+            <td class="ft-field">Sparse attn · v (output dim)</td>
+            <td>AREA</td>
+            <td>Block/Thread (tile=1)</td>
+            <td>Down → Thread tile &gt; 1</td>
+            <td class="ft-eg">Each thread could accumulate multiple v columns, amortizing score_smem broadcast across a v-tile. Requires per-thread score storage — changes smem layout.</td>
+            <td>Not acted on at D=64 — complexity outweighs ILP gain; revisit for larger D</td>
+          </tr>
+          <tr>
+            <td class="ft-field ft-yours">your dim</td>
+            <td class="ft-yours">AREA / REDUCE</td>
+            <td class="ft-yours">current hierarchy level</td>
+            <td class="ft-yours">up / down</td>
+            <td class="ft-yours">what changes and what is gained</td>
+            <td class="ft-yours">yes / no + reason</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="feeds-into">
+      <strong>Feeds into final step →</strong> Index expression table (max address check column — mark ✓ or ✗ for each tensor access; any ✗ must be resolved before the skeleton is produced)
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- ══ FINAL STEP: CODE DERIVATION ══ -->
+  <div class="section">
+    <div class="margin-note">
+      <span class="margin-note-label">output</span>
+      These four sub-tables are the direct translation of your completed framework into code. No design decisions remain — every cell is a transcription of something already recorded.
+    </div>
+    <div class="section-head">
+      <div class="badge b-code">Code<br>Deriv.</div>
+      <div class="section-head-text">
+        <h2>Code Derivation</h2>
+        <div class="section-q">"Given the completed tables, produce the kernel skeleton mechanically — in the order your IDE needs it."</div>
+      </div>
+    </div>
+
+    <div class="prose">
+      <p>Four sub-tables, completed in the order shown. Each sub-table has a source column pointing to the prior step that provides each value. Complete sub-table 1 first — it establishes the variable names used throughout sub-tables 2, 3, and 4. Everything here is symbolic: no numeric constants appear except in the max-address check column of sub-table 3, where they serve as a verification sanity check and nowhere else.</p>
+    </div>
+
+    <!-- ── SUB-TABLE 1: SYMBOL LEGEND ── -->
+    <div class="fill-table-wrap">
+      <span class="fill-table-wrap-label">1 of 4 — Symbol legend · populate from the Step 2 granularity table · one row per dimension</span>
+      <table class="fill-table">
+        <thead>
+          <tr>
+            <th>Dimension</th>
+            <th>Fate</th>
+            <th>Grid index var</th>
+            <th>Block tile var</th>
+            <th>Thread index var</th>
+            <th>Thread tile var</th>
+            <th>Reg loop var</th>
+            <th>Memory size var</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="ft-field">GEMM · m</td>
+            <td><span style="font-family:'JetBrains Mono',monospace;font-size:11px;padding:1px 5px;background:var(--c-1a-bg);border:1px solid var(--c-1a-bd);border-radius:3px;color:var(--c-1a)">AREA</span></td>
+            <td class="ft-eg"><code>blockIdx.y</code></td>
+            <td class="ft-eg"><code>BM</code></td>
+            <td class="ft-eg"><code>threadIdx.y</code></td>
+            <td class="ft-eg"><code>TM</code></td>
+            <td class="ft-eg"><code>tm</code></td>
+            <td class="ft-eg"><code>M</code></td>
+          </tr>
+          <tr>
+            <td class="ft-field">GEMM · n</td>
+            <td><span style="font-family:'JetBrains Mono',monospace;font-size:11px;padding:1px 5px;background:var(--c-1a-bg);border:1px solid var(--c-1a-bd);border-radius:3px;color:var(--c-1a)">AREA</span></td>
+            <td class="ft-eg"><code>blockIdx.x</code></td>
+            <td class="ft-eg"><code>BN</code></td>
+            <td class="ft-eg"><code>threadIdx.x</code></td>
+            <td class="ft-eg"><code>TN</code></td>
+            <td class="ft-eg"><code>tn</code></td>
+            <td class="ft-eg"><code>N</code></td>
+          </tr>
+          <tr>
+            <td class="ft-field">GEMM · k</td>
+            <td><span style="font-family:'JetBrains Mono',monospace;font-size:11px;padding:1px 5px;background:#fef2f2;border:1px solid #fca5a5;border-radius:3px;color:#991b1b">REDUCE</span></td>
+            <td class="ft-eg">—</td>
+            <td class="ft-eg"><code>BK</code></td>
+            <td class="ft-eg">—</td>
+            <td class="ft-eg">— (thread-private)</td>
+            <td class="ft-eg"><code>k</code></td>
+            <td class="ft-eg"><code>K</code></td>
+          </tr>
+          <tr>
+            <td class="ft-field">Sparse attn · q</td>
+            <td><span style="font-family:'JetBrains Mono',monospace;font-size:11px;padding:1px 5px;background:var(--c-1a-bg);border:1px solid var(--c-1a-bd);border-radius:3px;color:var(--c-1a)">AREA</span></td>
+            <td class="ft-eg"><code>blockIdx.x</code></td>
+            <td class="ft-eg">1 (one query per block)</td>
+            <td class="ft-eg">—</td>
+            <td class="ft-eg">—</td>
+            <td class="ft-eg">—</td>
+            <td class="ft-eg"><code>S</code></td>
+          </tr>
+          <tr>
+            <td class="ft-field">Sparse attn · v</td>
+            <td><span style="font-family:'JetBrains Mono',monospace;font-size:11px;padding:1px 5px;background:var(--c-1a-bg);border:1px solid var(--c-1a-bd);border-radius:3px;color:var(--c-1a)">AREA</span></td>
+            <td class="ft-eg">—</td>
+            <td class="ft-eg"><code>D_HEAD</code></td>
+            <td class="ft-eg"><code>threadIdx.x</code></td>
+            <td class="ft-eg">1</td>
+            <td class="ft-eg">—</td>
+            <td class="ft-eg"><code>D_HEAD</code></td>
+          </tr>
+          <tr>
+            <td class="ft-field">Sparse attn · k</td>
+            <td><span style="font-family:'JetBrains Mono',monospace;font-size:11px;padding:1px 5px;background:#fef2f2;border:1px solid #fca5a5;border-radius:3px;color:#991b1b">REDUCE</span></td>
+            <td class="ft-eg">—</td>
+            <td class="ft-eg"><code>D_HEAD</code></td>
+            <td class="ft-eg"><code>threadIdx.x</code> (warp lane)</td>
+            <td class="ft-eg">—</td>
+            <td class="ft-eg"><code>d_idx</code></td>
+            <td class="ft-eg"><code>D_HEAD</code></td>
+          </tr>
+          <tr>
+            <td class="ft-field">Sparse attn · j</td>
+            <td><span style="font-family:'JetBrains Mono',monospace;font-size:11px;padding:1px 5px;background:#fef2f2;border:1px solid #fca5a5;border-radius:3px;color:#991b1b">REDUCE</span></td>
+            <td class="ft-eg">—</td>
+            <td class="ft-eg"><code>T_J</code></td>
+            <td class="ft-eg">—</td>
+            <td class="ft-eg">—</td>
+            <td class="ft-eg"><code>j</code> (sparse iter)</td>
+            <td class="ft-eg"><code>S</code> (sparse subset)</td>
+          </tr>
+          <tr>
+            <td class="ft-field ft-yours">your dimension</td>
+            <td class="ft-yours">AREA / REDUCE</td>
+            <td class="ft-yours">blockIdx.x / .y / —</td>
+            <td class="ft-yours">block tile constant</td>
+            <td class="ft-yours">threadIdx.x / .y / —</td>
+            <td class="ft-yours">thread tile constant or 1</td>
+            <td class="ft-yours">loop variable name</td>
+            <td class="ft-yours">global size variable</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ── SUB-TABLE 2: DECLARATIONS ── -->
+    <div class="fill-table-wrap">
+      <span class="fill-table-wrap-label">2 of 4 — Declarations · everything declared before the kernel body and before the tile loop</span>
+      <table class="fill-table">
+        <thead>
+          <tr>
+            <th>What to declare</th>
+            <th>Source step</th>
+            <th>GEMM</th>
+            <th>Sparse attention</th>
+            <th>Your kernel</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="ft-field">Launch grid</td>
+            <td>Step 2 Grid→Global; symbol legend grid index vars and block tile vars</td>
+            <td class="ft-eg"><code>dim3 grid(ceil(N/BN), ceil(M/BM));</code></td>
+            <td class="ft-eg"><code>dim3 grid(S);</code></td>
+            <td class="ft-yours">one block per AREA dim — read from legend</td>
+          </tr>
+          <tr>
+            <td class="ft-field">Launch block</td>
+            <td>Step 2 granularity Thread row; block tile ÷ thread tile gives thread count per dim</td>
+            <td class="ft-eg"><code>dim3 block(BN/TN, BM/TM);</code> → (8, 8)</td>
+            <td class="ft-eg"><code>dim3 block(D_HEAD);</code> → 64 threads</td>
+            <td class="ft-yours">block tile ÷ thread tile per AREA dim</td>
+          </tr>
+          <tr>
+            <td class="ft-field">Smem buffers</td>
+            <td>Step 2 Block→Shared, validated by Step 4a; use confirmed sizes</td>
+            <td class="ft-eg"><code>__shared__ float A_smem[2][BK][BM], B_smem[2][BK][BN];</code></td>
+            <td class="ft-eg"><code>__shared__ float K_smem[2][T_J][D_HEAD], V_smem[2][T_J][D_HEAD], score_smem[T_J], warp_partial[NUM_WARPS][T_J];</code></td>
+            <td class="ft-yours">one declaration per Step 2 Block→Shared buffer (validated by 4a)</td>
+          </tr>
+          <tr>
+            <td class="ft-field">Register state vars</td>
+            <td>Step 1a state variable type and init value; Step 4b confirmed tile shape</td>
+            <td class="ft-eg"><code>float C_acc[TM][TN] = {};</code> (init = additive identity 0)</td>
+            <td class="ft-eg"><code>const float q_reg = Q[q_idx*D_HEAD+d_idx]; float m_acc=-FLT_MAX, l_acc=0.f, o_acc=0.f;</code></td>
+            <td class="ft-yours">one declaration per Step 1a state variable; init value from Step 1a</td>
+          </tr>
+          <tr>
+            <td class="ft-field">Tile loop bounds</td>
+            <td>Step 2 REDUCE dim Block granularity; memory size ÷ tile size from symbol legend</td>
+            <td class="ft-eg"><code>int num_tiles = ceil(K / BK);</code></td>
+            <td class="ft-eg"><code>int num_tiles = row_ptr[q_block+1] - row_ptr[q_block];</code> (sparse: from CSR)</td>
+            <td class="ft-yours">memory size var ÷ block tile var per REDUCE dim</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ── SUB-TABLE 3: INDEX EXPRESSIONS ── -->
+    <div class="fill-table-wrap">
+      <span class="fill-table-wrap-label">3 of 4 — Index expressions · one row per global memory access · leaf type from Step 1b selects the active column</span>
+      <table class="fill-table">
+        <thead>
+          <tr>
+            <th>Tensor &amp; dim</th>
+            <th>Leaf type</th>
+            <th>Arithmetic AREA<br><span style="font-weight:300;font-size:10px">grid×block + thread×tile + reg</span></th>
+            <th>Arithmetic REDUCE<br><span style="font-weight:300;font-size:10px">Flatten → Stride → Unflatten</span></th>
+            <th>Lookup<br><span style="font-weight:300;font-size:10px">array[arith_formula]</span></th>
+            <th>Conditional predicate<br><span style="font-weight:300;font-size:10px">valid = expr &lt; size_var</span></th>
+            <th>Max addr ✓/✗</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="ft-field">GEMM · A[m,k] global</td>
+            <td>Arith. REDUCE (coop. smem load)</td>
+            <td>—</td>
+            <td class="ft-eg"><code>tid=ty*BLOCK_X+tx; aRow=tid/BM; aCol=tile*BK+tid%BK; A[aRow*K+aCol]</code><br><small>Flatten: ty×BLOCK_X+tx · Stride: tile×BK · Unflatten: /BM, %BK</small></td>
+            <td>—</td>
+            <td class="ft-eg"><code>aRow&lt;M &amp;&amp; aCol&lt;K</code> (last tile)</td>
+            <td>(M−1)×K+(K−1) ✓</td>
+          </tr>
+          <tr>
+            <td class="ft-field">GEMM · B[k,n] global</td>
+            <td>Arith. REDUCE (coop. smem load)</td>
+            <td>—</td>
+            <td class="ft-eg"><code>bRow=tid/BN; bCol=tile*BK+tid%BK; B[bRow*N+bCol]</code></td>
+            <td>—</td>
+            <td class="ft-eg"><code>bRow&lt;K &amp;&amp; bCol&lt;N</code> (last tile)</td>
+            <td>(K−1)×N+(N−1) ✓</td>
+          </tr>
+          <tr>
+            <td class="ft-field">GEMM · C[m,n] store</td>
+            <td>Arith. AREA</td>
+            <td class="ft-eg"><code>m_out = blockIdx.y*BM + threadIdx.y*TM + tm;</code><br><code>n_out = blockIdx.x*BN + threadIdx.x*TN + tn;</code><br><code>C[m_out*N + n_out]</code></td>
+            <td>—</td>
+            <td>—</td>
+            <td class="ft-eg"><code>m_out&lt;M &amp;&amp; n_out&lt;N</code></td>
+            <td>(M−1)×N+(N−1) ✓</td>
+          </tr>
+          <tr>
+            <td class="ft-field">Sparse attn · Q[q,k] load</td>
+            <td>Arith. AREA</td>
+            <td class="ft-eg"><code>Q[blockIdx.x * D_HEAD + threadIdx.x]</code><br><small>q grid=blockIdx.x, block tile=1; v thread=threadIdx.x, tile=1</small></td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+            <td>(S−1)×D+(D−1) ✓</td>
+          </tr>
+          <tr>
+            <td class="ft-field">Sparse attn · kv_indices[ptr]</td>
+            <td>Lookup</td>
+            <td>—</td>
+            <td>—</td>
+            <td class="ft-eg"><code>kv_indices[row_ptr[q_block] + sparse_iter]</code><br><small>arithmetic formula inside brackets; result is the physical KV block index</small></td>
+            <td class="ft-eg"><code>sparse_iter &lt; row_ptr[q_block+1] - row_ptr[q_block]</code></td>
+            <td>nnz_blocks−1 ✓</td>
+          </tr>
+          <tr>
+            <td class="ft-field">Sparse attn · K[j,k] smem load</td>
+            <td>Arith. REDUCE (coop. smem load)<br>+ lookup indirection for j</td>
+            <td>—</td>
+            <td class="ft-eg"><code>j_abs = kv_block_idx * T_J + j_in_tile;</code><br><code>K_smem[buf][j_in_tile][d_idx] = K[j_abs*D_HEAD + d_idx]</code><br><small>kv_block_idx from lookup row above; j_in_tile direct; d_idx=threadIdx.x</small></td>
+            <td>—</td>
+            <td class="ft-eg"><code>j_abs &lt; S</code></td>
+            <td>(S−1)×D+(D−1) ✓</td>
+          </tr>
+          <tr>
+            <td class="ft-field">Sparse attn · O[q,v] store</td>
+            <td>Arith. AREA</td>
+            <td class="ft-eg"><code>O[blockIdx.x * D_HEAD + threadIdx.x]</code></td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+            <td>(S−1)×D+(D−1) ✓</td>
+          </tr>
+          <tr>
+            <td class="ft-field ft-yours">your tensor &amp; dim</td>
+            <td class="ft-yours">from Step 1b leaf type table</td>
+            <td class="ft-yours">grid_var×block_tile + thread_var×thread_tile + reg_var (from legend)</td>
+            <td class="ft-yours">Flatten: ty×blockDim.x+tx · Stride: tile×tile_size+flat_offset · Unflatten: /smem_cols, %smem_cols</td>
+            <td class="ft-yours">index_array[arithmetic_formula]</td>
+            <td class="ft-yours">global_expr &lt; mem_size_var (from legend)</td>
+            <td class="ft-yours">substitute max per dim; compare to buffer size</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ── SUB-TABLE 4: PHASE SKELETON ── -->
+    <div class="fill-table-wrap">
+      <span class="fill-table-wrap-label">4 of 4 — Phase-ordered code skeleton · read FSM (Step 3) top to bottom · each row is one code block in sequence</span>
+      <table class="fill-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Code block</th>
+            <th>Content from</th>
+            <th>GEMM</th>
+            <th>Sparse attention</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="ft-field">1</td>
+            <td>Declarations block<br><small style="font-weight:300">before kernel body</small></td>
+            <td>Sub-table 2 in full</td>
+            <td class="ft-eg"><span class="cc">dim3 grid(ceil(N/BN), ceil(M/BM));
+dim3 block(BN/TN, BM/TM);
+__shared__ float A_smem[2][BK][BM];
+__shared__ float B_smem[2][BK][BN];
+float C_acc[TM][TN] = {};
+float a_reg[TM], b_reg[TN];</span></td>
+            <td class="ft-eg"><span class="cc">// NUM_WARPS: compile-time constant (smem requires this)
+// D_HEAD and T_J must be constexpr or template params
+static_assert(D_HEAD % 32 == 0, "full warps required");
+constexpr int NUM_WARPS = (D_HEAD + 31) / 32;
+
+dim3 grid(S);
+dim3 block(D_HEAD);
+__shared__ float K_smem[2][T_J][D_HEAD];
+__shared__ float V_smem[2][T_J][D_HEAD];
+__shared__ float score_smem[T_J];
+__shared__ float warp_partial[NUM_WARPS][T_J]; // constexpr size ✓
+float q_reg = Q[q_idx*D_HEAD + d_idx];
+float m_acc = -FLT_MAX, l_acc = 0.f, o_acc = 0.f;</span></td>
+          </tr>
+          <tr>
+            <td class="ft-field">2</td>
+            <td>BOUNDS_CHECK<br><small style="font-weight:300">early return</small></td>
+            <td>Step 1b grid-level conditional leaves; legend grid index vars and memory size vars</td>
+            <td class="ft-eg"><span class="cc">if (block_m*BM >= M || block_n*BN >= N)
+    return;</span></td>
+            <td class="ft-eg"><span class="cc">if (q_idx >= S || d_idx >= D_HEAD)
+    return;</span></td>
+          </tr>
+          <tr>
+            <td class="ft-field">3</td>
+            <td>Tile loop open<br><small style="font-weight:300">over REDUCE dim</small></td>
+            <td>Sub-table 2 tile loop bounds; Step 2 REDUCE Block granularity; novel loop structure if lookup leaf (sparse iter walks kv_indices)</td>
+            <td class="ft-eg"><span class="cc">int num_tiles = (K + BK - 1) / BK;
+for (int tile = 0; tile &lt; num_tiles; ++tile) {
+    int buf = tile &amp; 1;</span></td>
+            <td class="ft-eg"><span class="cc">int num_tiles = row_ptr[q_block+1] - row_ptr[q_block];
+for (int tile = 0; tile &lt; num_tiles; ++tile) {
+    int buf = tile &amp; 1;
+    int kv_block = kv_indices[row_ptr[q_block] + tile];</span></td>
+          </tr>
+          <tr>
+            <td class="ft-field">4</td>
+            <td>LOAD<br><small style="font-weight:300">+ <code>__syncthreads()</code></small></td>
+            <td>Sub-table 3 REDUCE rows (Flatten→Stride→Unflatten or direct); Step 1b conditional leaf predicates; Step 2 Block→Shared buffer names</td>
+            <td class="ft-eg"><span class="cc">// Load coverage: S=BK×BM elems, T=BLOCK_THREADS
+// Each thread loads ceil(S/T) elements via stride loop
+const int BT = (BM/TM)*(BN/TN);
+for (int p = tid; p &lt; BK*BM; p += BT) {
+    int row_in_tile = p % BM;   // M dimension (0..BM-1)
+    int col_in_tile = p / BM;   // K dimension (0..BK-1)
+    int global_row = block_m*BM + row_in_tile;  // M index
+    int global_col = tile*BK   + col_in_tile;   // K index
+    A_smem[buf][col_in_tile][row_in_tile] =  // smem layout [K][M] ✓
+        (global_row&lt;M &amp;&amp; global_col&lt;K)
+        ? A[global_row*K + global_col] : 0.f;
+}
+for (int p = tid; p &lt; BK*BN; p += BT) {
+    int row_in_tile = p / BN;   // K dimension (0..BK-1)
+    int col_in_tile = p % BN;   // N dimension (0..BN-1)
+    int global_row = tile*BK   + row_in_tile;   // K index
+    int global_col = block_n*BN + col_in_tile;  // N index
+    B_smem[buf][row_in_tile][col_in_tile] =
+        (global_row&lt;K &amp;&amp; global_col&lt;N)
+        ? B[global_row*N + global_col] : 0.f;
+}
+__syncthreads();</span></td>
+            <td class="ft-eg"><span class="cc">for (int j = 0; j &lt; T_J; ++j) {
+    int j_abs = kv_block*T_J + j;  // lookup indirection
+    K_smem[buf][j][d_idx] =
+        (j_abs&lt;S) ? K[j_abs*D_HEAD+d_idx] : 0.f;
+    V_smem[buf][j][d_idx] =
+        (j_abs&lt;S) ? V[j_abs*D_HEAD+d_idx] : 0.f;
+}
+__syncthreads();</span></td>
+          </tr>
+          <tr>
+            <td class="ft-field">5</td>
+            <td>COMPUTE<br><small style="font-weight:300">register inner loops</small></td>
+            <td>Legend thread tile vars (inner loop bounds); sub-table 2 register state var names; Step 2 Thread→Registers accumulation body</td>
+            <td class="ft-eg"><span class="cc">for (int k = 0; k &lt; BK; ++k) {
+    for (int tm=0; tm&lt;TM; ++tm)
+        a_reg[tm] = A_smem[buf][k][ty*TM+tm];
+    for (int tn=0; tn&lt;TN; ++tn)
+        b_reg[tn] = B_smem[buf][k][tx*TN+tn];
+    for (int tm=0; tm&lt;TM; ++tm)
+        for (int tn=0; tn&lt;TN; ++tn)
+            C_acc[tm][tn] += a_reg[tm] * b_reg[tn];
+}</span></td>
+            <td class="ft-eg"><span class="cc">for (int j = 0; j &lt; T_J; ++j) {
+    float partial = q_reg * K_smem[buf][j][d_idx];</span></td>
+          </tr>
+          <tr>
+            <td class="ft-field">6</td>
+            <td>WARP REDUCE<br><small style="font-weight:300">if Warp→Primitives non-empty</small></td>
+            <td>Step 2 Warp→Primitives primitive family; Step 3 lane binding (cross-checks 1+2)</td>
+            <td class="ft-eg"><em>Not present</em> — REDUCE k is thread-private; no warp primitive</td>
+            <td class="ft-eg"><span class="cc">    unsigned mask = __ballot_sync(0xffffffff, true);
+    for (int off=16; off&gt;0; off&gt;&gt;=1)
+        partial += __shfl_down_sync(
+            mask, partial, off);</span></td>
+          </tr>
+          <tr>
+            <td class="ft-field">7</td>
+            <td>BLOCK MERGE<br><small style="font-weight:300">if inter-warp trigger fired</small></td>
+            <td>Step 2 inter-warp trigger (NUM_WARPS &gt; 1); warp_partial buffer from sub-table 2; Step 3 sync locations</td>
+            <td class="ft-eg"><em>Not present</em> — no warp primitive, so no inter-warp stage</td>
+            <td class="ft-eg"><span class="cc">    if (lane_id==0) warp_partial[warp_id][j] = partial;
+}  // end j loop
+__syncthreads();
+if (d_idx == 0) {
+    for (int j=0; j&lt;T_J; ++j) {
+        float total = 0.f;
+        for (int w=0; w&lt;NUM_WARPS; ++w)
+            total += warp_partial[w][j];
+        int j_abs = kv_block*T_J + j;
+        score_smem[j] = (j_abs&lt;S)
+            ? total * rsqrtf((float)D_HEAD)
+            : -FLT_MAX;
+    }
+}
+__syncthreads();</span></td>
+          </tr>
+          <tr>
+            <td class="ft-field">8</td>
+            <td>Novel contract phases<br><small style="font-weight:300">from FSM phases column</small></td>
+            <td>Algorithm Classification FSM phases from contract; Step 1a state variable for the accumulation body</td>
+            <td class="ft-eg"><em>Not present</em> — GEMM output contract: STORE only</td>
+            <td class="ft-eg"><span class="cc">for (int j = 0; j &lt; T_J; ++j) {
+    float s_j   = score_smem[j];
+    float m_new = fmaxf(m_acc, s_j);
+    float e_old = __expf(m_acc - m_new);
+    float e_new = __expf(s_j  - m_new);
+    l_acc = l_acc*e_old + e_new;
+    o_acc = o_acc*e_old + e_new*V_smem[buf][j][d_idx];
+    m_acc = m_new;
+}</span></td>
+          </tr>
+          <tr>
+            <td class="ft-field">9</td>
+            <td>Tile loop close<br><small style="font-weight:300">+ <code>__syncthreads()</code></small></td>
+            <td>Step 3 barrier rule (smem consumed; next LOAD will overwrite)</td>
+            <td class="ft-eg"><span class="cc">    if (tile+1 &lt; num_tiles) __syncthreads();
+}  // end tile loop</span></td>
+            <td class="ft-eg"><span class="cc">    __syncthreads();
+}  // end tile loop</span></td>
+          </tr>
+          <tr>
+            <td class="ft-field">10</td>
+            <td>NORMALIZE<br><small style="font-weight:300">if in output contract</small></td>
+            <td>Algorithm Classification output contract; Step 1a state variable (what to transform)</td>
+            <td class="ft-eg"><em>Not present</em></td>
+            <td class="ft-eg"><span class="cc">o_acc /= l_acc;</span></td>
+          </tr>
+          <tr>
+            <td class="ft-field">11</td>
+            <td>STORE</td>
+            <td>Sub-table 3 AREA rows (arithmetic AREA formula); sub-table 3 predicate column if conditional leaf; Step 2 AREA ownership (no atomic)</td>
+            <td class="ft-eg"><span class="cc">for (int tm=0; tm&lt;TM; ++tm) {
+  for (int tn=0; tn&lt;TN; ++tn) {
+    int m_out = block_m*BM + ty*TM + tm;
+    int n_out = block_n*BN + tx*TN + tn;
+    if (m_out&lt;M &amp;&amp; n_out&lt;N)
+        C[m_out*N + n_out] = C_acc[tm][tn];
+  }
+}</span></td>
+            <td class="ft-eg"><span class="cc">O[q_idx*D_HEAD + d_idx] = o_acc;</span></td>
+          </tr>
+          <tr>
+            <td class="ft-field ft-yours">your phase</td>
+            <td class="ft-yours">read FSM phase name and sequence position from Step 3</td>
+            <td class="ft-yours">content source from FSM phase row; dim binding column names the threadIdx role for that block</td>
+            <td class="ft-yours">write your kernel's code block here</td>
+            <td class="ft-yours">—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <strong>The check before we open your editor.</strong> Every line we are about to write should trace to one cell in one of these four sub-tables. Launch config traces to sub-table 2 row 1. Every <code>__shared__</code> declaration traces to sub-table 2 row 3. Every index expression traces to sub-table 3. Every code block traces to a sub-table 4 row in the exact order shown. Every <code>__syncthreads()</code> traces to a row transition between a LOAD or BLOCK_MERGE phase and what follows it. If a line of code cannot be traced, either it is unjustified and should be removed, or your tables are incomplete and need to be revisited before coding.
+    </div>
+  </div>
+
+  <!-- ══ WHAT YOU HAVE WHEN DONE ══ -->
+  <div class="section">
+    <div class="prose">
+      <p><strong>What we have when the framework is complete.</strong> We have an architectural specification of your kernel derived from the mathematical operation, not from trial and error. We know the exact grid dimensions and how they map to your problem's AREA dimensions. We know precisely what data lives in shared memory, what lives in registers, and what is read directly from global memory — and we have a reuse-count justification for each of those decisions. We know the full phase sequence of the kernel and the location of every barrier. We have verified that no memory access can exceed its buffer's bounds.</p>
+
+      <p><strong>What the framework does not give you.</strong> The framework deliberately stops at the architectural boundary. It tells us that a REDUCE dimension needs a heap accumulator — it doesn't tell us how to implement that heap. It tells us that an intra-warp reduction should use shuffles — it doesn't give you the shuffle sequence for a specific data type and warp size. It identifies that a particular loop is a candidate for vectorized loads — it doesn't tell us the right vector width for your specific GPU generation. These implementation details require knowledge of the specific hardware and algorithm, and they are best answered by domain expertise or by targeted profiling after the kernel is structurally correct.</p>
+
+      <p><strong>A useful final check before coding.</strong> Before opening your editor, read your planned implementation mentally and ask, for each structural decision: which table entry justifies this? The grid shape should trace to the Grid→Global column. Each shared memory buffer should trace to the Block→Shared column and be validated by the Lifetime Table. Each barrier should trace to a specific memory boundary crossing in the FSM. Each state variable should trace to Step 1a's reduction body. If we find a structural decision that can't be traced to a table entry, either the decision is unjustified and should be removed, or your tables are incomplete and we need to go back and find where it belongs. Every structural decision has a home in the framework. If it doesn't have one, that's important information.</p>
+    </div>
+  </div>
+
+  <!-- ══ IDE CODE VIEW ══ -->
+  <div class="section">
+    <div class="section-head">
+      <div class="badge b-code" style="font-size:10px;padding:4px 6px;">Final<br>Output</div>
+      <div class="section-head-text">
+        <h2>Complete Kernels — Annotated</h2>
+        <div class="section-q">Every line traced to its source table and phase. <span style="color:#6a9955">Green = phase header.</span> <span style="color:#9cdcfe">Blue = source table.</span> <span style="color:#555">Gray = not present.</span></div>
+      </div>
+    </div>
+
+    <div class="ide-wrap">
+      <div class="ide-header">
+        <span class="ide-tab">gemm.cu</span>
+        <span class="ide-tab inactive">sparse_attention.cu</span>
+      </div>
+      <div class="ide-body"><pre><span class="ide-ph">// ╔══════════════════════════════════════════════════════════════════════╗
+// ║  Tiled GEMM  ·  C[M,N] = A[M,K] x B[K,N]                          ║
+// ╚══════════════════════════════════════════════════════════════════════╝</span>
+
+<span class="ide-ph">// ── DECLARATIONS [Sub-table 4, row 1] ─────────────────────────────────</span>
+<span class="ide-src">// [Sub-table 2, smem buffers | Step 2 Block→Shared, validated Step 4a]</span>
+<span class="ide-kw">__shared__</span> <span class="ide-ty">float</span> A_smem[<span class="ide-num">2</span>][BK][BM];
+<span class="ide-kw">__shared__</span> <span class="ide-ty">float</span> B_smem[<span class="ide-num">2</span>][BK][BN];
+
+<span class="ide-kw">__global__</span> <span class="ide-ty">void</span> <span class="ide-fn">gemm</span>(<span class="ide-kw">const</span> <span class="ide-ty">float</span>* A, <span class="ide-kw">const</span> <span class="ide-ty">float</span>* B, <span class="ide-ty">float</span>* C,
+                      <span class="ide-ty">int</span> M, <span class="ide-ty">int</span> N, <span class="ide-ty">int</span> K) {
+
+    <span class="ide-src">// [Symbol legend, grid/thread index vars | Step 2 Grid→Global]</span>
+    <span class="ide-kw">const</span> <span class="ide-ty">int</span> block_m = blockIdx.y,  block_n = blockIdx.x;
+    <span class="ide-kw">const</span> <span class="ide-ty">int</span> tx = threadIdx.x,      ty = threadIdx.y;
+    <span class="ide-kw">const</span> <span class="ide-ty">int</span> tid = ty * (BN/TN) + tx;
+
+    <span class="ide-src">// [Sub-table 2, register state vars | Step 1a: acc over k, init=0]</span>
+    <span class="ide-ty">float</span> C_acc[TM][TN] = {};
+    <span class="ide-ty">float</span> a_reg[TM], b_reg[TN];
+
+    <span class="ide-src">// [Sub-table 2, tile loop bounds | symbol legend: K / BK]</span>
+    <span class="ide-kw">const</span> <span class="ide-ty">int</span> num_tiles = (K + BK - <span class="ide-num">1</span>) / BK;
+
+<span class="ide-ph">// ── BOUNDS CHECK [Sub-table 4, row 2] ─────────────────────────────────</span>
+    <span class="ide-src">// [Sub-table 3, conditional predicate | Step 1b: grid-level leaf → early exit]</span>
+    <span class="ide-kw">if</span> (block_m * BM &gt;= M || block_n * BN &gt;= N) <span class="ide-kw">return</span>;
+
+<span class="ide-ph">// ── TILE LOOP [Sub-table 4, row 3] ────────────────────────────────────</span>
+    <span class="ide-src">// [Sub-table 2, tile loop bounds | Step 2 REDUCE Block granularity: K / BK]</span>
+    <span class="ide-kw">for</span> (<span class="ide-ty">int</span> tile = <span class="ide-num">0</span>; tile &lt; num_tiles; ++tile) {
+        <span class="ide-kw">const</span> <span class="ide-ty">int</span> buf = tile &amp; <span class="ide-num">1</span>;
+
+<span class="ide-ph">// ── LOAD [Sub-table 4, row 4] ─────────────────────────────────────────</span>
+        <span class="ide-src">// [Load coverage rule: stride loop — each thread loads ceil(S/T) elements]</span>
+        <span class="ide-src">// [A is M×K: row_in_tile=p%BM (M-dim), col_in_tile=p/BM (K-dim)]</span>
+        <span class="ide-kw">const</span> <span class="ide-ty">int</span> BLOCK_THREADS = (BM/TM) * (BN/TN);
+        <span class="ide-kw">for</span> (<span class="ide-ty">int</span> p = tid; p &lt; BK * BM; p += BLOCK_THREADS) {
+            <span class="ide-ty">int</span> row_in_tile = p % BM;                      <span class="ide-src">// M dimension (0..BM-1)</span>
+            <span class="ide-ty">int</span> col_in_tile = p / BM;                      <span class="ide-src">// K dimension (0..BK-1)</span>
+            <span class="ide-ty">int</span> global_row  = block_m * BM + row_in_tile;  <span class="ide-src">// M index into A</span>
+            <span class="ide-ty">int</span> global_col  = tile   * BK + col_in_tile;  <span class="ide-src">// K index into A</span>
+            <span class="ide-src">// [Conditional leaf: tile-boundary predicated load]</span>
+            A_smem[buf][col_in_tile][row_in_tile] =  <span class="ide-src">// smem layout: [K][M] matches __shared__ A_smem[2][BK][BM]</span>
+                (global_row &lt; M &amp;&amp; global_col &lt; K) ? A[global_row * K + global_col] : <span class="ide-num">0.f</span>;
+        }
+        <span class="ide-src">// [B is K×N: row_in_tile=p/BN (K-dim), col_in_tile=p%BN (N-dim)]</span>
+        <span class="ide-kw">for</span> (<span class="ide-ty">int</span> p = tid; p &lt; BK * BN; p += BLOCK_THREADS) {
+            <span class="ide-ty">int</span> row_in_tile = p / BN;                      <span class="ide-src">// K dimension (0..BK-1)</span>
+            <span class="ide-ty">int</span> col_in_tile = p % BN;                      <span class="ide-src">// N dimension (0..BN-1)</span>
+            <span class="ide-ty">int</span> global_row  = tile   * BK + row_in_tile;  <span class="ide-src">// K index into B</span>
+            <span class="ide-ty">int</span> global_col  = block_n * BN + col_in_tile; <span class="ide-src">// N index into B</span>
+            B_smem[buf][row_in_tile][col_in_tile] =
+                (global_row &lt; K &amp;&amp; global_col &lt; N) ? B[global_row * N + global_col] : <span class="ide-num">0.f</span>;
+        }
+        <span class="ide-src">// [Step 3 FSM, barrier | smem written by all → read by all in COMPUTE]</span>
+        __syncthreads();
+
+<span class="ide-ph">// ── COMPUTE [Sub-table 4, row 5] ──────────────────────────────────────</span>
+        <span class="ide-src">// [Symbol legend: TM, TN, tm, tn | Step 4b: a_reg reuse=TN=8, b_reg reuse=TM=8]</span>
+        <span class="ide-kw">for</span> (<span class="ide-ty">int</span> k = <span class="ide-num">0</span>; k &lt; BK; ++k) {
+            <span class="ide-kw">for</span> (<span class="ide-ty">int</span> tm=<span class="ide-num">0</span>; tm&lt;TM; ++tm)
+                a_reg[tm] = A_smem[buf][k][ty*TM+tm];
+            <span class="ide-kw">for</span> (<span class="ide-ty">int</span> tn=<span class="ide-num">0</span>; tn&lt;TN; ++tn)
+                b_reg[tn] = B_smem[buf][k][tx*TN+tn];
+            <span class="ide-kw">for</span> (<span class="ide-ty">int</span> tm=<span class="ide-num">0</span>; tm&lt;TM; ++tm)
+                <span class="ide-kw">for</span> (<span class="ide-ty">int</span> tn=<span class="ide-num">0</span>; tn&lt;TN; ++tn)
+                    C_acc[tm][tn] += a_reg[tm] * b_reg[tn];
+        }
+        <span class="ide-src">// [Step 3 FSM, barrier | smem consumed; next LOAD will overwrite]</span>
+        <span class="ide-kw">if</span> (tile + <span class="ide-num">1</span> &lt; num_tiles) __syncthreads();
+
+    } <span class="ide-ph">// end tile loop</span>
+
+    <span class="ide-absent">// WARP REDUCE — not present [row 6: k is thread-private, no primitive needed]</span>
+    <span class="ide-absent">// BLOCK MERGE — not present [row 7: no primitive → inter-warp trigger silent]</span>
+    <span class="ide-absent">// NORMALIZE   — not present [row 10: output contract = STORE only]</span>
+
+<span class="ide-ph">// ── STORE [Sub-table 4, row 11] ───────────────────────────────────────</span>
+    <span class="ide-kw">for</span> (<span class="ide-ty">int</span> tm=<span class="ide-num">0</span>; tm&lt;TM; ++tm) {
+        <span class="ide-kw">for</span> (<span class="ide-ty">int</span> tn=<span class="ide-num">0</span>; tn&lt;TN; ++tn) {
+            <span class="ide-src">// [Sub-table 3, arithmetic AREA | symbol legend: grid×BM + thread×TM + reg]</span>
+            <span class="ide-ty">int</span> m_out = block_m*BM + ty*TM + tm;
+            <span class="ide-ty">int</span> n_out = block_n*BN + tx*TN + tn;
+            <span class="ide-src">// [Sub-table 3, conditional predicate | Step 1b: tile-boundary guard on store]</span>
+            <span class="ide-kw">if</span> (m_out &lt; M &amp;&amp; n_out &lt; N)
+                C[m_out*N + n_out] = C_acc[tm][tn];
+        }
+    }
+}
+
+<span class="ide-src">// [Sub-table 2, launch config | Step 2 Grid→Global: n→blockIdx.x, m→blockIdx.y]</span>
+<span class="ide-ty">void</span> <span class="ide-fn">launch_gemm</span>(<span class="ide-ty">float</span>* A, <span class="ide-ty">float</span>* B, <span class="ide-ty">float</span>* C, <span class="ide-ty">int</span> M, <span class="ide-ty">int</span> N, <span class="ide-ty">int</span> K) {
+    dim3 grid((N+BN-<span class="ide-num">1</span>)/BN, (M+BM-<span class="ide-num">1</span>)/BM);   <span class="ide-src">// [symbol legend: n→x, m→y]</span>
+    dim3 block(BN/TN, BM/TM);                <span class="ide-src">// [symbol legend: block tile / thread tile]</span>
+    <span class="ide-fn">gemm</span>&lt;&lt;&lt;grid, block&gt;&gt;&gt;(A, B, C, M, N, K);
+}</pre></div>
+    </div>
+
+    <div class="ide-wrap">
+      <div class="ide-header">
+        <span class="ide-tab inactive">gemm.cu</span>
+        <span class="ide-tab">sparse_attention.cu</span>
+      </div>
+      <div class="ide-body"><pre><span class="ide-ph">// ╔══════════════════════════════════════════════════════════════════════╗
+// ║  Block-Sparse Flash Attention  (DeepSeek sparse pattern)           ║
+// ║  O[q,v] = sparse_softmax_j( Q·K/sqrt(D) ) · V                     ║
+// ╚══════════════════════════════════════════════════════════════════════╝</span>
+
+<span class="ide-ph">// ── DECLARATIONS [Sub-table 4, row 1] ─────────────────────────────────</span>
+<span class="ide-src">// [NUM_WARPS must be a compile-time constant — shared memory arrays require constant sizes]</span>
+<span class="ide-src">// [Because warp_partial[NUM_WARPS][T_J] is __shared__, NUM_WARPS must be constexpr, not a runtime int]</span>
+<span class="ide-src">// [D_HEAD and T_J are template parameters or #defines; NUM_WARPS is derived at compile time]</span>
+<span class="ide-kw">static_assert</span>(D_HEAD % <span class="ide-num">32</span> == <span class="ide-num">0</span>, <span class="ide-str">"D_HEAD must be a multiple of 32 for full warps"</span>);
+<span class="ide-kw">constexpr</span> <span class="ide-ty">int</span> NUM_WARPS = (D_HEAD + <span class="ide-num">31</span>) / <span class="ide-num">32</span>;  <span class="ide-src">// compile-time constant; ceiling division</span>
+
+<span class="ide-src">// [Sub-table 2, smem buffers | Step 2 Block→Shared, validated Step 4a]</span>
+<span class="ide-kw">__shared__</span> <span class="ide-ty">float</span> K_smem[<span class="ide-num">2</span>][T_J][D_HEAD];
+<span class="ide-kw">__shared__</span> <span class="ide-ty">float</span> V_smem[<span class="ide-num">2</span>][T_J][D_HEAD];
+<span class="ide-kw">__shared__</span> <span class="ide-ty">float</span> score_smem[T_J];              <span class="ide-src">// reuse=D_HEAD, highest-reuse buffer</span>
+<span class="ide-src">// [Step 2 inter-warp trigger: NUM_WARPS=(D_HEAD+31)/32 → warp_partial required]</span>
+<span class="ide-kw">__shared__</span> <span class="ide-ty">float</span> warp_partial[NUM_WARPS][T_J]; <span class="ide-src">// NUM_WARPS constexpr above — valid smem size</span>
+
+<span class="ide-kw">__global__</span> <span class="ide-ty">void</span> <span class="ide-fn">sparse_attention</span>(
+    <span class="ide-kw">const</span> <span class="ide-ty">float</span>* Q, <span class="ide-kw">const</span> <span class="ide-ty">float</span>* K, <span class="ide-kw">const</span> <span class="ide-ty">float</span>* V, <span class="ide-ty">float</span>* O,
+    <span class="ide-kw">const</span> <span class="ide-ty">int</span>* kv_indices, <span class="ide-kw">const</span> <span class="ide-ty">int</span>* row_ptr, <span class="ide-ty">int</span> S)
+{
+    <span class="ide-src">// [Symbol legend, grid/thread vars | Step 2 Grid→Global: q→blockIdx.x, k/v→threadIdx.x]</span>
+    <span class="ide-kw">const</span> <span class="ide-ty">int</span> q_idx   = blockIdx.x;
+    <span class="ide-kw">const</span> <span class="ide-ty">int</span> d_idx   = threadIdx.x;
+    <span class="ide-src">// [NUM_WARPS is a constexpr defined above — not redefined here; warp/lane derived from d_idx]</span>
+    <span class="ide-kw">const</span> <span class="ide-ty">int</span> warp_id = d_idx / <span class="ide-num">32</span>;
+    <span class="ide-kw">const</span> <span class="ide-ty">int</span> lane_id = d_idx % <span class="ide-num">32</span>;
+
+<span class="ide-ph">// ── BOUNDS CHECK [Sub-table 4, row 2] ─────────────────────────────────</span>
+    <span class="ide-src">// [Sub-table 3, conditional predicate | Step 1b: grid-level leaf → early exit]</span>
+    <span class="ide-kw">if</span> (q_idx &gt;= S || d_idx &gt;= D_HEAD) <span class="ide-kw">return</span>;
+
+<span class="ide-ph">// ── INIT [Sub-table 4, row 1 continued] ───────────────────────────────</span>
+    <span class="ide-src">// [Sub-table 3, arithmetic AREA | Q: blockIdx.x×D_HEAD + threadIdx.x]</span>
+    <span class="ide-kw">const</span> <span class="ide-ty">float</span> q_reg = Q[q_idx * D_HEAD + d_idx];
+    <span class="ide-src">// [Sub-table 2, register state vars | Step 1a: (m,l,o) over j; Algorithm Classification: m=−∞]</span>
+    <span class="ide-ty">float</span> m_acc = -FLT_MAX;
+    <span class="ide-ty">float</span> l_acc = <span class="ide-num">0.f</span>;
+    <span class="ide-ty">float</span> o_acc = <span class="ide-num">0.f</span>;
+
+    <span class="ide-src">// [Sub-table 2, tile loop bounds | CSR row_ptr gives sparse tile count]</span>
+    <span class="ide-kw">const</span> <span class="ide-ty">int</span> q_block   = q_idx;
+    <span class="ide-kw">const</span> <span class="ide-ty">int</span> num_tiles = row_ptr[q_block+<span class="ide-num">1</span>] - row_ptr[q_block];
+
+    <span class="ide-src">// [Zero-length guard | if sparse row is empty, write identity and return]</span>
+    <span class="ide-kw">if</span> (num_tiles == <span class="ide-num">0</span>) { O[q_idx * D_HEAD + d_idx] = <span class="ide-num">0.f</span>; <span class="ide-kw">return</span>; }
+
+<span class="ide-ph">// ── TILE LOOP [Sub-table 4, row 3] ────────────────────────────────────</span>
+    <span class="ide-src">// [Sub-table 3, lookup leaf | kv_indices drives iteration — not sequential j]</span>
+    <span class="ide-kw">for</span> (<span class="ide-ty">int</span> tile = <span class="ide-num">0</span>; tile &lt; num_tiles; ++tile) {
+        <span class="ide-kw">const</span> <span class="ide-ty">int</span> buf = tile &amp; <span class="ide-num">1</span>;
+        <span class="ide-src">// [Sub-table 3, lookup | kv_indices[row_ptr[q]+tile] → physical KV block]</span>
+        <span class="ide-kw">const</span> <span class="ide-ty">int</span> kv_block = kv_indices[row_ptr[q_block] + tile];
+
+<span class="ide-ph">// ── LOAD [Sub-table 4, row 4] ─────────────────────────────────────────</span>
+        <span class="ide-src">// [Sub-table 3, arithmetic REDUCE + lookup | j_abs from lookup, d_idx direct]</span>
+        <span class="ide-kw">for</span> (<span class="ide-ty">int</span> j = <span class="ide-num">0</span>; j &lt; T_J; ++j) {
+            <span class="ide-ty">int</span> j_abs = kv_block * T_J + j;
+            <span class="ide-src">// [Sub-table 3, conditional predicate | Step 1b: tile-boundary guard]</span>
+            K_smem[buf][j][d_idx] = (j_abs &lt; S) ? K[j_abs*D_HEAD+d_idx] : <span class="ide-num">0.f</span>;
+            V_smem[buf][j][d_idx] = (j_abs &lt; S) ? V[j_abs*D_HEAD+d_idx] : <span class="ide-num">0.f</span>;
+        }
+        <span class="ide-src">// [Step 3 FSM, barrier | K_smem, V_smem written; read by all threads in COMPUTE]</span>
+        __syncthreads();
+
+<span class="ide-ph">// ── COMPUTE [Sub-table 4, row 5] ──────────────────────────────────────</span>
+        <span class="ide-kw">for</span> (<span class="ide-ty">int</span> j = <span class="ide-num">0</span>; j &lt; T_J; ++j) {
+            <span class="ide-src">// [Sub-table 4 row 5 | q_reg reuse=nnz_blocks across tile loop, Step 4b]</span>
+            <span class="ide-ty">float</span> partial = q_reg * K_smem[buf][j][d_idx];
+
+<span class="ide-ph">// ── WARP REDUCE [Sub-table 4, row 6] ──────────────────────────────────</span>
+            <span class="ide-src">// [Active mask rule: compute from ballot, never hardcode 0xffffffff]</span>
+            <span class="ide-src">// [Step 2 Warp→Primitives: shfl_down | Step 3 cross-check 1: lane_id=k in COMPUTE]</span>
+            <span class="ide-kw">unsigned</span> mask = __ballot_sync(<span class="ide-num">0xffffffff</span>, <span class="ide-kw">true</span>);
+            <span class="ide-kw">for</span> (<span class="ide-ty">int</span> off = <span class="ide-num">16</span>; off &gt; <span class="ide-num">0</span>; off &gt;&gt;= <span class="ide-num">1</span>)
+                partial += __shfl_down_sync(mask, partial, off);
+
+<span class="ide-ph">// ── BLOCK MERGE write [Sub-table 4, row 7] ────────────────────────────</span>
+            <span class="ide-src">// [Step 2 inter-warp trigger: NUM_WARPS=(D_HEAD+31)/32 → warp_partial buffer]</span>
+            <span class="ide-kw">if</span> (lane_id == <span class="ide-num">0</span>) warp_partial[warp_id][j] = partial;
+        }
+        <span class="ide-src">// [Step 3 FSM, barrier | warp_partial written by lane 0; thread 0 reads all]</span>
+        __syncthreads();
+
+<span class="ide-ph">// ── BLOCK MERGE reduce + score [Sub-table 4, row 7 continued] ─────────</span>
+        <span class="ide-kw">if</span> (d_idx == <span class="ide-num">0</span>) {
+            <span class="ide-kw">for</span> (<span class="ide-ty">int</span> j = <span class="ide-num">0</span>; j &lt; T_J; ++j) {
+                <span class="ide-ty">float</span> total = <span class="ide-num">0.f</span>;
+                <span class="ide-kw">for</span> (<span class="ide-ty">int</span> w = <span class="ide-num">0</span>; w &lt; NUM_WARPS; ++w) total += warp_partial[w][j];
+                <span class="ide-ty">int</span> j_abs = kv_block * T_J + j;
+                score_smem[j] = (j_abs &lt; S) ? total * rsqrtf((<span class="ide-ty">float</span>)D_HEAD) : -FLT_MAX;
+            }
+        }
+        <span class="ide-src">// [Step 3 FSM, barrier | score_smem written by thread 0; read by all in SOFTMAX_UPDATE]</span>
+        __syncthreads();
+
+<span class="ide-ph">// ── NOVEL PHASE: SOFTMAX_UPDATE [Sub-table 4, row 8] ──────────────────</span>
+        <span class="ide-src">// [Algorithm Classification: online softmax from output contract]</span>
+        <span class="ide-src">// [Step 1a: state vars m_acc, l_acc, o_acc; reduce body = online softmax merge]</span>
+        <span class="ide-kw">for</span> (<span class="ide-ty">int</span> j = <span class="ide-num">0</span>; j &lt; T_J; ++j) {
+            <span class="ide-ty">float</span> s_j   = score_smem[j];
+            <span class="ide-ty">float</span> m_new = <span class="ide-fn">fmaxf</span>(m_acc, s_j);
+            <span class="ide-ty">float</span> e_old = <span class="ide-fn">__expf</span>(m_acc - m_new);
+            <span class="ide-ty">float</span> e_new = <span class="ide-fn">__expf</span>(s_j  - m_new);
+            l_acc = l_acc * e_old + e_new;
+            o_acc = o_acc * e_old + e_new * V_smem[buf][j][d_idx];
+            m_acc = m_new;
+        }
+
+        <span class="ide-src">// [Step 3 FSM, barrier | smem consumed; next LOAD will overwrite K_smem, V_smem]</span>
+        __syncthreads();
+
+    } <span class="ide-ph">// end tile loop</span>
+
+<span class="ide-ph">// ── NORMALIZE [Sub-table 4, row 10] ───────────────────────────────────</span>
+    <span class="ide-src">// [Algorithm Classification: output contract → weights sum to 1 → divide by l_acc]</span>
+    o_acc /= l_acc;
+
+<span class="ide-ph">// ── STORE [Sub-table 4, row 11] ───────────────────────────────────────</span>
+    <span class="ide-src">// [Sub-table 3, arithmetic AREA | symbol legend: q→blockIdx.x×D_HEAD + threadIdx.x]</span>
+    O[q_idx * D_HEAD + d_idx] = o_acc;   <span class="ide-src">// no predicate: S blocks cover q exactly</span>
+}
+
+<span class="ide-src">// [Sub-table 2, launch config | Step 2 Grid→Global: AREA q → one block per query]</span>
+<span class="ide-ty">void</span> <span class="ide-fn">launch_sparse_attention</span>(<span class="ide-ty">float</span>* Q, <span class="ide-ty">float</span>* K, <span class="ide-ty">float</span>* V, <span class="ide-ty">float</span>* O,
+                              <span class="ide-ty">int</span>* kv_indices, <span class="ide-ty">int</span>* row_ptr, <span class="ide-ty">int</span> S) {
+    dim3 grid(S);        <span class="ide-src">// [symbol legend: q → blockIdx.x, block tile = 1 query per block]</span>
+    dim3 block(D_HEAD);  <span class="ide-src">// [symbol legend: k/v → threadIdx.x, D_HEAD threads = 2 warps]</span>
+    <span class="ide-fn">sparse_attention</span>&lt;&lt;&lt;grid, block&gt;&gt;&gt;(Q, K, V, O, kv_indices, row_ptr, S);
+}</pre></div>
+    </div>
+  </div>
+
+  <!-- ══ SUMMARY CARD ══ -->
+  <div class="summary-card">
+    <h2>Quick reference</h2>
+
+    <div class="summary-row">
+      <div class="sum-step">Step 1a<br>Dimension Fate</div>
+      <div>
+        <div class="sum-q">For each dimension: does it appear in the output? Mark AREA or REDUCE. For every REDUCE dimension, write the reduction body and state variable. Verify the reduction is associative and commutative (parallel character). If it is not — for example, selection (top-K, argmax) or scan (prefix sum) — this framework does not apply; stop and use a dedicated algorithm reference for that operation.</div>
+        <div class="sum-out">→ dimension fate table, reduction bodies, state variable types, reduction characters</div>
+      </div>
+    </div>
+
+    <div class="summary-row">
+      <div class="sum-step">Algorithm<br>Classification</div>
+      <div>
+        <div class="sum-q">Which algorithm family implements this reduction? Compute relevant ratios and choose. Write down the output contract — ordering, normalization, stochastic steps — everything the output must satisfy beyond shape. Name every intermediate tensor the chosen family introduces.</div>
+        <div class="sum-out">→ algorithm family, output contract, any intermediate tensors introduced</div>
+      </div>
+    </div>
+
+    <div class="summary-row">
+      <div class="sum-step">Step 1b<br>Access Patterns</div>
+      <div>
+        <div class="sum-q">For each dimension of each tensor (including intermediates from the algorithm): what leaf type is the index? Arithmetic, lookup, type-conversion, or conditional? For conditional leaves: is the triggering iterator a grid-level dimension (→ Bounds Check phase, early exit) or a tile iterator (→ predicated load inside the tile loop, never an early exit)?</div>
+        <div class="sum-out">→ leaf type table; conditional leaf placement (early exit vs predicated load)</div>
+      </div>
+    </div>
+
+    <div class="summary-row">
+      <div class="sum-step">Step 2<br>Binding Table</div>
+      <div>
+        <div class="sum-q">Record granularity per (dimension, level). Fill four columns: Grid→Global, Block→Shared, Warp→Primitives, Thread→Registers. For Warp→Primitives: after selecting the primitive family, compute NUM_WARPS = (blockDim.x + 31) / 32 (ceiling division) per REDUCE dimension. If NUM_WARPS &gt; 1, add a warp_partial[NUM_WARPS] buffer to Block→Shared and note two extra FSM sync points. Then: (1) smem budget check — sum all Block→Shared buffers including warp_partial; (2) register budget check — sum all Thread→Registers state variables, flag if &gt;64 floats.</div>
+        <div class="sum-out">→ granularity chain, grid shape, smem layout + size, warp_partial if needed, register size estimate, warp primitive family</div>
+      </div>
+    </div>
+
+    <div class="summary-row">
+      <div class="sum-step">Step 4a<br>Lifetime (block)</div>
+      <div>
+        <div class="sum-q">Before building the FSM: for every Block→Shared buffer, compute reuse count (product of active iterator sizes absent from the buffer's index). If reuse = 1 and no coalescing justification, remove from Block→Shared and revise Step 2. If large reuse was missed, add to Block→Shared. Redo budget checks. Only proceed to Step 3 when all staging decisions are validated.</div>
+        <div class="sum-out">→ block-level reuse counts; validated Block→Shared column; any Step 2 revisions resolved before FSM</div>
+      </div>
+    </div>
+
+    <div class="summary-row">
+      <div class="sum-step">Step 3<br>FSM</div>
+      <div>
+        <div class="sum-q">Read the validated Binding Table for memory boundary crossings to identify phases. Apply the barrier rule: __syncthreads() wherever one thread writes shared memory that another thread reads. For every phase, fill the dim-binding column: "lane_id → [dim]" for warp-primitive phases; "threadIdx → [dim]" for all other phases that touch memory. Apply three cross-checks: (1) lane_id binding matches between Compute and Warp Reduce? (2) REDUCE dimension is parallel in character? (3) threadIdx role is consistent across each shared memory boundary — the buffer is populated and consumed with the same index interpretation? Record which state variables are alive in each phase.</div>
+        <div class="sum-out">→ ordered phase sequence, barrier locations, dim-binding column (lane_id + thread role), three cross-checks, state variable lifetimes</div>
+      </div>
+    </div>
+
+    <div class="summary-row" style="opacity: 0.75;">
+      <div class="sum-step" style="font-style: italic;">Opt · Pipeline<br>(after Step 3)</div>
+      <div>
+        <div class="sum-q">Only if the Step 4a reuse count is high and profiling shows idle memory cycles: add an Async column to the Binding Table, allocate two shared memory buffers (ping/pong), replace __syncthreads() with cp.async.wait_group(), and add an Init phase before the tile loop.</div>
+        <div class="sum-out">→ async flag in binding table, double-buffered smem, pipelined FSM — memory and compute overlapped</div>
+      </div>
+    </div>
+
+    <div class="summary-row">
+      <div class="sum-step">Step 4b<br>Lifetime (thread)</div>
+      <div>
+        <div class="sum-q">After the FSM: for every register-held value, identify which of the thread's owned AREA dimensions are absent from its index. That product is the register-level reuse count. Validate the thread tile shape from Step 2: if tile &gt; 1 but no register value has reuse &gt; 1, reduce tile; if tile = 1 but reuse is large, increase tile. Corrections here do not require redoing the FSM.</div>
+        <div class="sum-out">→ thread-level reuse counts, validated Thread→Registers tile shape, any Step 2 thread-tile corrections</div>
+      </div>
+    </div>
+
+    <div class="summary-row">
+      <div class="sum-step">Step 5<br>Index Trees</div>
+      <div>
+        <div class="sum-q">Write every memory address as a tree of typed leaves. Compute max addresses and verify they fit allocated buffers. Upward pass: for every REDUCE leaf, ask what happens if it moves up one hierarchy level (parallelization opportunity). Downward pass: for every AREA leaf at Block or Warp level, ask what happens if a slice moves down into the thread register tile (ILP / register tiling opportunity). Record both sets of opportunities by name before opening an editor.</div>
+        <div class="sum-out">→ address range verification, upward parallelism opportunities, downward register-tiling opportunities · feeds into: Index expression table max address column</div>
+      </div>
+    </div>
+
+    <div class="summary-row">
+      <div class="sum-step">Code<br>Derivation</div>
+      <div>
+        <div class="sum-q">Four sub-tables completed in sequence, entirely from the prior steps. (1) Symbol legend: one row per dimension, mapping abstract roles (grid index var, block tile, thread index var, thread tile, reg loop var, memory size) to your kernel's actual variable names — populated from the Step 2 granularity table. (2) Declaration table: launch config, smem buffers, register state vars — read from symbol legend and Steps 2/1a. (3) Index expression table: one row per global memory access, one active column per leaf type — arithmetic AREA uses the cascade formula from the legend, REDUCE uses Flatten→Stride→Unflatten, lookup adds an indirection, conditional adds a predicate. (4) Phase-ordered code skeleton: read FSM rows top to bottom; each row becomes one code block in the sequence shown.</div>
+        <div class="sum-out">→ symbol legend · declaration table · index expression table with max-address checks · phase-ordered code skeleton</div>
+      </div>
+    </div>
+
+    <div class="closing">
+      The framework answers <em>"what structure should this kernel have?"</em> — grid shape, memory staging, phase ordering, barrier placement, warp usage. It does not answer <em>"how fast will it be?"</em> Occupancy, register spill counts, instruction throughput, and vectorization width are profiling-time concerns. The framework's scope ends exactly where systematic derivation gives way to hardware-specific tuning.
+    </div>
+
+    <div style="margin-top:28px;border-top:1px solid rgba(255,255,255,0.15);padding-top:24px;">
+      <div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.18);border-radius:8px;padding:22px 26px;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.5);margin-bottom:14px;">Scope limitations</div>
+        <p style="font-size:14px;font-weight:300;line-height:1.8;color:rgba(255,255,255,0.85);margin-bottom:12px;">I've used this framework on kernels where every REDUCE dimension is associative and commutative (parallel reduction character). The kernels I've worked through with it are: vector add, transpose, shared reduced sum, GEMM, dense attention, paged KV MLA attention, and sparse attention.</p>
+        <p style="font-size:14px;font-weight:300;line-height:1.8;color:rgba(255,255,255,0.85);margin-bottom:12px;">It does <em>not</em> cover: <strong style="font-weight:500;color:rgba(255,255,255,0.95)">scan</strong> (prefix sum, exclusive scan, running count — Blelloch up-sweep/down-sweep changes the phase structure to two passes with fundamentally different inter-thread dependencies); <strong style="font-weight:500;color:rgba(255,255,255,0.95)">selection</strong> (top-K, argmax, beam search — requires warp min-heaps, radix select, or bitonic sort, each introducing intermediate tensors the Binding Table is not designed to derive); or any operation whose reduction body is not freely associative and commutative.</p>
+        <p style="font-size:14px;font-weight:300;line-height:1.8;color:rgba(255,255,255,0.7);margin:0;">If the operation is outside this set, the derivation steps will still run but the phase structure they produce probably won't be right. Catching that at Step 1a saves a lot of rework later.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
